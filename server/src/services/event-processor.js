@@ -4,7 +4,7 @@
  */
 export function createEventProcessor(queries) {
   return function processEvent(event) {
-    const projectId = event.project_id;
+    let projectId = event.project_id;
     let payload;
     try {
       payload = typeof event.payload === 'string'
@@ -12,6 +12,14 @@ export function createEventProcessor(queries) {
         : (event.payload || {});
     } catch {
       payload = {};
+    }
+
+    // 0. Resolve project_id from session if not provided on the event
+    if (!projectId && event.session_id) {
+      const session = queries.getSessionById(event.session_id);
+      if (session) {
+        projectId = session.project_id;
+      }
     }
 
     // 1. Upsert project (always update last_activity_at)
