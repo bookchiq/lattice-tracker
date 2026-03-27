@@ -107,12 +107,14 @@ describe('P2-011: Duplicate client_event_id is handled gracefully', () => {
 
   after(async () => { await closeApp(app); });
 
-  it('does not throw 500 on duplicate client_event_id', async () => {
+  it('returns 409 on duplicate client_event_id', async () => {
     const res = await app.inject({
       method: 'POST', url: '/api/events', headers: authHeader(),
       payload: { event_type: 'session.start', session_id: 'dup-sess', project_id: 'github.com:test:dup', timestamp: '2026-03-26T10:01:00Z', client_event_id: 'evt-unique-1' },
     });
-    assert.equal(res.statusCode, 201, 'duplicate client_event_id should not cause 500');
+    assert.equal(res.statusCode, 409, 'duplicate client_event_id should return 409');
+    const body = JSON.parse(res.body);
+    assert.equal(body.error, 'duplicate_event');
   });
 });
 

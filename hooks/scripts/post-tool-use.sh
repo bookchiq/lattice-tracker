@@ -5,7 +5,9 @@
 # Marked async: true — does not block Claude Code.
 set -o pipefail
 
-INPUT="$(cat)"
+# Read stdin without forking (bash builtin, not $(cat))
+INPUT=""
+while IFS= read -r line; do INPUT+="$line"; done
 
 # Fast path: reject if input doesn't contain any git/gh command keyword
 if [[ "$INPUT" != *'"git '* ]] && [[ "$INPUT" != *'"gh pr'* ]]; then
@@ -36,6 +38,10 @@ source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/git-snapshot.sh"
 
 read -r SESSION_ID CWD <<< "$(echo "$INPUT" | jq -r '[.session_id // "", .cwd // ""] | @tsv')"
+
+if ! lattice_validate_session_id "$SESSION_ID"; then
+  exit 0
+fi
 
 if [ -n "$CWD" ] && [ -d "$CWD" ]; then
   cd "$CWD" 2>/dev/null || true

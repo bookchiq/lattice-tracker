@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 SESSION_ID="$(echo "$INPUT" | jq -r '.session_id // empty')"
-if [ -z "$SESSION_ID" ]; then
+if ! lattice_validate_session_id "$SESSION_ID"; then
   exit 0
 fi
 

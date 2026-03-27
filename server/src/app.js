@@ -58,11 +58,6 @@ export async function buildApp(opts = {}) {
   await app.register(dbPlugin);
   await app.register(authPlugin);
 
-  await app.register(rateLimit, {
-    max: rateLimitMax,
-    timeWindow: '1 minute',
-  });
-
   // Security headers
   app.addHook('onSend', async (request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff');
@@ -70,20 +65,28 @@ export async function buildApp(opts = {}) {
     reply.header('X-XSS-Protection', '0');
     reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     if (request.url.startsWith('/api/')) return;
-    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'");
+    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'");
   });
 
-  // Static dashboard
+  // Static dashboard (1 hour cache)
   await app.register(fastifyStatic, {
     root: path.join(__dirname, '..', 'dashboard'),
     prefix: '/',
+    maxAge: 3600000,
   });
 
-  // API routes
-  await app.register(healthRoutes, { prefix: '/api' });
-  await app.register(eventRoutes, { prefix: '/api' });
-  await app.register(projectRoutes, { prefix: '/api' });
-  await app.register(sessionRoutes, { prefix: '/api' });
+  // API routes — rate limiter scoped to /api/ only
+  await app.register(async function apiRoutes(api) {
+    await api.register(rateLimit, {
+      max: rateLimitMax,
+      timeWindow: '1 minute',
+    });
+
+    await api.register(healthRoutes);
+    await api.register(eventRoutes);
+    await api.register(projectRoutes);
+    await api.register(sessionRoutes);
+  }, { prefix: '/api' });
 
   return app;
 }

@@ -12,7 +12,7 @@ function safeTokenCompare(a, b) {
 async function authPlugin(fastify) {
   fastify.addHook('onRequest', async (request, reply) => {
     if (!request.url.startsWith('/api/')) return;
-    if (request.url.startsWith('/api/health') && request.method === 'GET') return;
+    if ((request.url === '/api/health' || request.url.startsWith('/api/health?')) && request.method === 'GET') return;
 
     const header = request.headers.authorization;
     if (!header) {

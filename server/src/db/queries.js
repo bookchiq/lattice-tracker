@@ -1,5 +1,6 @@
 // Valid session state transitions
 const VALID_TRANSITIONS = {
+  unknown: ['active', 'waiting_for_input', 'completed', 'abandoned'],
   active: ['waiting_for_input', 'completed', 'abandoned'],
   waiting_for_input: ['active', 'completed', 'abandoned'],
   completed: [],
@@ -9,13 +10,25 @@ const VALID_TRANSITIONS = {
 export function createQueries(db) {
   // -- Events --
   const _insertEvent = db.prepare(`
-    INSERT OR IGNORE INTO events (client_event_id, session_id, project_id, event_type, timestamp, hostname, payload)
+    INSERT INTO events (client_event_id, session_id, project_id, event_type, timestamp, hostname, payload)
     VALUES (@client_event_id, @session_id, @project_id, @event_type, @timestamp, @hostname, @payload)
   `);
 
+  const _getEventByClientId = db.prepare(`SELECT id FROM events WHERE client_event_id = ?`);
+
   function insertEvent(event) {
+    const clientEventId = event.client_event_id || null;
+
+    // Check for duplicate client_event_id before inserting
+    if (clientEventId) {
+      const existing = _getEventByClientId.get(clientEventId);
+      if (existing) {
+        return { changes: 0, lastInsertRowid: existing.id, duplicate: true };
+      }
+    }
+
     return _insertEvent.run({
-      client_event_id: event.client_event_id || null,
+      client_event_id: clientEventId,
       session_id: event.session_id || null,
       project_id: event.project_id || null,
       event_type: event.event_type,
@@ -43,13 +56,14 @@ export function createQueries(db) {
     });
   }
 
-  const _getProjects = db.prepare(`SELECT * FROM projects ORDER BY last_activity_at DESC`);
-  const _getProjectsByTag = db.prepare(`SELECT * FROM projects WHERE client_tag = ? ORDER BY last_activity_at DESC`);
+  const _getProjects = db.prepare(`SELECT * FROM projects ORDER BY last_activity_at DESC LIMIT @limit OFFSET @offset`);
+  const _getProjectsByTag = db.prepare(`SELECT * FROM projects WHERE client_tag = @client_tag ORDER BY last_activity_at DESC LIMIT @limit OFFSET @offset`);
   const _getActiveProjects = db.prepare(`
     SELECT DISTINCT p.* FROM projects p
     INNER JOIN sessions s ON s.project_id = p.id
     WHERE s.status IN ('active', 'waiting_for_input')
     ORDER BY p.last_activity_at DESC
+    LIMIT @limit OFFSET @offset
   `);
   const _getIdleProjects = db.prepare(`
     SELECT p.* FROM projects p
@@ -57,6 +71,7 @@ export function createQueries(db) {
       SELECT 1 FROM sessions s WHERE s.project_id = p.id AND s.status IN ('active', 'waiting_for_input')
     )
     ORDER BY p.last_activity_at DESC
+    LIMIT @limit OFFSET @offset
   `);
   const _getProjectById = db.prepare(`SELECT * FROM projects WHERE id = ?`);
   const _updateProject = db.prepare(`
@@ -64,16 +79,19 @@ export function createQueries(db) {
   `);
 
   function getProjects(filters = {}) {
+    const limit = filters.limit || 50;
+    const offset = filters.offset || 0;
+
     if (filters.status === 'active') {
-      return _getActiveProjects.all();
+      return _getActiveProjects.all({ limit, offset });
     }
     if (filters.status === 'idle') {
-      return _getIdleProjects.all();
+      return _getIdleProjects.all({ limit, offset });
     }
     if (filters.client_tag) {
-      return _getProjectsByTag.all(filters.client_tag);
+      return _getProjectsByTag.all({ client_tag: filters.client_tag, limit, offset });
     }
-    return _getProjects.all();
+    return _getProjects.all({ limit, offset });
   }
 
   function getProjectById(id) {
@@ -95,6 +113,12 @@ export function createQueries(db) {
     INSERT INTO sessions (id, project_id, hostname, interface, device_label, status, started_at, last_heartbeat_at)
     VALUES (@id, @project_id, @hostname, @interface, @device_label, @status, @started_at, @started_at)
     ON CONFLICT(id) DO UPDATE SET
+      project_id = COALESCE(@project_id, sessions.project_id),
+      hostname = COALESCE(@hostname, sessions.hostname),
+      interface = COALESCE(@interface, sessions.interface),
+      device_label = COALESCE(@device_label, sessions.device_label),
+      status = CASE WHEN sessions.status = 'unknown' THEN @status ELSE sessions.status END,
+      started_at = CASE WHEN sessions.status = 'unknown' THEN @started_at ELSE sessions.started_at END,
       last_heartbeat_at = COALESCE(@started_at, sessions.last_heartbeat_at)
   `);
 
@@ -205,12 +229,19 @@ export function createQueries(db) {
   const _getSnapshotsByProjectId = db.prepare(`
     SELECT * FROM git_snapshots WHERE project_id = ? ORDER BY timestamp DESC LIMIT @limit OFFSET @offset
   `);
+  const _getSnapshotsBySessionId = db.prepare(`
+    SELECT * FROM git_snapshots WHERE session_id = ? ORDER BY timestamp DESC LIMIT @limit OFFSET @offset
+  `);
   const _getLatestSnapshot = db.prepare(`
     SELECT * FROM git_snapshots WHERE project_id = ? ORDER BY timestamp DESC, id DESC LIMIT 1
   `);
 
   function getSnapshotsByProjectId(projectId, { limit = 20, offset = 0 } = {}) {
     return _getSnapshotsByProjectId.all(projectId, { limit, offset });
+  }
+
+  function getSnapshotsBySessionId(sessionId, { limit = 20, offset = 0 } = {}) {
+    return _getSnapshotsBySessionId.all(sessionId, { limit, offset });
   }
 
   function getLatestSnapshot(projectId) {
@@ -268,6 +299,7 @@ export function createQueries(db) {
     getEventsBySessionId,
     insertGitSnapshot,
     getSnapshotsByProjectId,
+    getSnapshotsBySessionId,
     getLatestSnapshot,
     insertCheckpoint,
     getLatestCheckpoint,

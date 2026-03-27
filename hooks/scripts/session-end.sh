@@ -17,9 +17,7 @@ if [ -z "$SESSION_ID" ]; then
   exit 0
 fi
 
-# Validate session_id against path traversal
-if [[ ! "$SESSION_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-  lattice_log "ERROR: Invalid session_id: ${SESSION_ID}"
+if ! lattice_validate_session_id "$SESSION_ID"; then
   exit 0
 fi
 

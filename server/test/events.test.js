@@ -142,7 +142,7 @@ describe('POST /api/events/batch', () => {
     assert.equal(res.statusCode, 201);
     const body = JSON.parse(res.body);
     assert.equal(body.ok, true);
-    assert.equal(body.event_ids.length, 2);
+    assert.equal(body.results.length, 2);
 
     // Both session and snapshot should exist
     const sessRes = await app.inject({

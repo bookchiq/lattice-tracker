@@ -59,16 +59,6 @@ chmod 700 "$CONFIG_DIR"
 chmod 700 "${CONFIG_DIR}/active-sessions"
 mkdir -p "${CONFIG_DIR}/last-checkpoint"
 
-# Write config.json
-CONFIG_JSON="${CONFIG_DIR}/config.json"
-jq -n \
-  --arg api_url "$API_URL" \
-  --arg api_token "$API_TOKEN" \
-  --arg device_label "$DEVICE_LABEL" \
-  '{api_url: $api_url, api_token: $api_token, device_label: $device_label}' \
-  > "$CONFIG_JSON"
-chmod 600 "$CONFIG_JSON"
-
 # Generate config.env (sourceable shell vars)
 CONFIG_ENV="${CONFIG_DIR}/config.env"
 cat > "$CONFIG_ENV" << ENVEOF
