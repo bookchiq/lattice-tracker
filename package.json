@@ -1,0 +1,12 @@
+{
+  "name": "lattice-tracker",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "cd server && npm start",
+    "dev": "cd server && npm run dev",
+    "test": "cd server && npm test",
+    "install:server": "cd server && npm install"
+  }
+}
