@@ -283,7 +283,7 @@ Bash hook scripts that emit events to the Lattice API, plus the checkpoint syste
 
 **Tasks:**
 
-- [ ] Create `hooks/scripts/lib/common.sh` — consolidated shared library (config + emit + detect-project)
+- [x] Create `hooks/scripts/lib/common.sh` — consolidated shared library (config + emit + detect-project)
   - Source `~/.config/lattice/config.env` (shell vars, not JSON — avoids jq fork)
   - Provide `lattice_log()` function that appends to `~/.config/lattice/lattice-hooks.log`
   - Provide `lattice_emit()` function: accepts event JSON, POSTs via curl with `--max-time 3 --connect-timeout 2`
@@ -304,11 +304,11 @@ Bash hook scripts that emit events to the Lattice API, plus the checkpoint syste
 > - Extract multiple fields in one `jq` call (one fork) instead of N separate calls: `read -r TOOL CMD <<< "$(echo "$INPUT" | jq -r '[.tool_name, .tool_input.command // ""] | @tsv')"`.
 > - For `sessionStorage` over `localStorage`, `pipefail` over `set -e`, and other choices: these come from security and Bash best-practices research during plan deepening.
 
-- [ ] Create `hooks/scripts/lib/git-snapshot.sh` — capture current git state
+- [x] Create `hooks/scripts/lib/git-snapshot.sh` — capture current git state
   - Output JSON: `{ branch, commit_hash, commit_message, has_uncommitted_changes, uncommitted_summary }`
   - Batch all four git commands' output construction into a single `jq -n` call where possible
 
-- [ ] Create `hooks/scripts/session-start.sh`
+- [x] Create `hooks/scripts/session-start.sh`
   - Read JSON from stdin (`session_id`, `cwd`, `source`)
   - Source `common.sh`, detect project
   - Detect interface inline (5 lines: check `$VSCODE_PID` → `"vscode"`, check `$TERM_PROGRAM` → value, default → `"terminal"`)
@@ -333,18 +333,18 @@ Bash hook scripts that emit events to the Lattice API, plus the checkpoint syste
 
 > The session-start hook is the primary mechanism for informing Claude Code about Lattice capabilities. Injecting available slash commands and the API URL in `additionalContext` closes the discoverability gap between dashboard users (who see a UI) and agent sessions (which only know what they're told). Without this, agents can't compose ad-hoc API queries even though the API supports it.
 
-- [ ] Create `hooks/scripts/session-end.sh`
+- [x] Create `hooks/scripts/session-end.sh`
   - Read JSON from stdin
   - Capture final git snapshot
   - **Use batch endpoint:** Emit `session.end` + `git.snapshot` in a single request
   - Remove `~/.config/lattice/active-sessions/<session_id>.json`
 
-- [ ] Create `hooks/scripts/notification.sh`
+- [x] Create `hooks/scripts/notification.sh`
   - Read stdin with `read`, check for waiting indicator with bash string matching (no `jq` on fast path)
   - If message indicates waiting for input → source `common.sh`, emit `session.waiting` event
   - Exit 0 quickly for other notification types
 
-- [ ] Create `hooks/scripts/post-tool-use.sh`
+- [x] Create `hooks/scripts/post-tool-use.sh`
   - Read JSON from stdin
   - **Fast path:** The PostToolUse hook config uses `"matcher": "Bash"`, so this script only fires for Bash tool use. No need to check `tool_name` in the script.
   - Extract `tool_input.command` via `jq` (acceptable latency since `async: true`)
@@ -356,7 +356,7 @@ Bash hook scripts that emit events to the Lattice API, plus the checkpoint syste
     - `*` → exit 0
   - Mark as `async: true` in hooks config
 
-- [ ] Create `hooks/scripts/stop.sh`
+- [x] Create `hooks/scripts/stop.sh`
   - **CRITICAL: Zero-cost fast path.** This fires after every Claude Code response.
   - Read stdin into variable with `cat` (required by hooks protocol)
   - Check `stop_hook_active` using pure Bash regex — NO `jq`, NO `source`:
@@ -373,7 +373,7 @@ Bash hook scripts that emit events to the Lattice API, plus the checkpoint syste
 
 > `stop.sh` fires after every Claude Code response. Benchmarks show: Bash interpreter startup ~2ms, `jq` fork ~5-10ms, `source` of config file ~1-5ms. The fast path MUST avoid all of these. By using pure Bash string matching (`[[ "$INPUT" =~ pattern ]]`) and a stat syscall (`[ -f path ]`), the fast path exits in ~2-3ms total. Only when the checkpoint flag exists (rare — only after PR creation or merge) does the script pay the full cost of sourcing libraries and building JSON.
 
-- [ ] Create `hooks/scripts/heartbeat.sh`
+- [x] Create `hooks/scripts/heartbeat.sh`
   - Scan `~/.config/lattice/active-sessions/` for session files
   - For each file: extract `ppid` and `ppid_start_time`, verify PID is alive AND started at the expected time:
     ```bash
@@ -389,14 +389,14 @@ Bash hook scripts that emit events to the Lattice API, plus the checkpoint syste
 
 > PIDs are reused by the OS. Storing only the PID means a stale session file with a recycled PID would be treated as active. By also storing `ppid_start_time` (the process start time from `ps -p $pid -o lstart=`) and comparing it on each heartbeat, we detect PID reuse. If the PID is alive but started at a different time, the original Claude Code process is gone and the session is orphaned.
 
-- [ ] Create `hooks/hooks.json` — hook event configuration for the install script to merge
+- [x] Create `hooks/hooks.json` — hook event configuration for the install script to merge
 
 **Acceptance criteria:**
-- [ ] `session-start.sh` emits events via batch endpoint and creates active-session file when receiving valid stdin JSON
-- [ ] `stop.sh` exits in <3ms when no flag file exists (verified with `time` or `PS4` tracing)
-- [ ] `post-tool-use.sh` exits in <1ms for non-git commands (script only fires for Bash due to matcher, but `case` fallthrough is instant)
-- [ ] `stop.sh` correctly detects `stop_hook_active` via bash regex and exits to prevent loops
-- [ ] `heartbeat.sh` detects orphaned sessions including PID reuse
+- [x] `session-start.sh` emits events via batch endpoint and creates active-session file when receiving valid stdin JSON
+- [x] `stop.sh` exits in <3ms when no flag file exists (verified with `time` or `PS4` tracing)
+- [x] `post-tool-use.sh` exits in <1ms for non-git commands (script only fires for Bash due to matcher, but `case` fallthrough is instant)
+- [x] `stop.sh` correctly detects `stop_hook_active` via bash regex and exits to prevent loops
+- [x] `heartbeat.sh` detects orphaned sessions including PID reuse
 - [ ] All scripts handle missing config gracefully (exit 0, log error)
 - [ ] Checkpoint flag-file flow works end-to-end: `post-tool-use.sh` writes flag → `stop.sh` reads and injects context → Claude writes checkpoint + POSTs via skill's curl command
 
