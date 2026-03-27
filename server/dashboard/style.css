@@ -29,6 +29,7 @@
 
 /* Reset */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
 
 body {
   font-family: system-ui, -apple-system, sans-serif;
@@ -397,6 +398,7 @@ body {
   min-height: 100dvh;
   padding: var(--space-lg);
 }
+
 
 .auth-form {
   max-width: 400px;
