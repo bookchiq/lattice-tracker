@@ -6,7 +6,10 @@
   "plugins": [
     {
       "name": "lattice",
-      "source": ".",
+      "source": {
+        "source": "github",
+        "repo": "bookchiq/lattice-tracker"
+      },
       "description": "Cross-device Claude Code session and project tracker",
       "version": "0.1.0"
     }

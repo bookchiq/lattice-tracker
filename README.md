@@ -60,7 +60,14 @@ Lattice has two parts that are installed separately on each machine:
 Inside a Claude Code session, run:
 
 ```
-/plugin add bookchiq/lattice-tracker
+/plugin marketplace add bookchiq/lattice-tracker
+/plugin install lattice@lattice-tracker
+```
+
+Or for local development, start Claude Code with the plugin directory:
+
+```bash
+claude --plugin-dir /path/to/lattice-tracker
 ```
 
 **b) Install hooks and config** (gives you automatic session tracking, git snapshots, and heartbeat):
