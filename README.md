@@ -30,13 +30,25 @@ pm2 startup  # follow printed instructions
 
 ### 2. Set up Nginx reverse proxy
 
+First, install Nginx and Certbot if not already installed:
+
+```bash
+sudo apt update
+sudo apt install nginx certbot python3-certbot-nginx
+```
+
+Create a new Nginx site config file:
+
+```bash
+sudo nano /etc/nginx/sites-available/lattice
+```
+
+Paste this configuration (replace `lattice.yourdomain.com` with your actual domain):
+
 ```nginx
 server {
-    listen 443 ssl http2;
+    listen 80;
     server_name lattice.yourdomain.com;
-
-    ssl_certificate /etc/letsencrypt/live/lattice.yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/lattice.yourdomain.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:3377;
@@ -48,9 +60,38 @@ server {
 }
 ```
 
-Set up SSL with: `sudo certbot --nginx -d lattice.yourdomain.com`
+Enable the site and get an SSL certificate:
 
-**Important:** Never expose port 3377 directly. Use `ufw allow 443` only.
+```bash
+# Create a symlink to enable the site
+sudo ln -s /etc/nginx/sites-available/lattice /etc/nginx/sites-enabled/
+
+# Test the config for syntax errors
+sudo nginx -t
+
+# Reload Nginx to pick up the new site
+sudo systemctl reload nginx
+
+# Get an SSL certificate (this will also update the config to add HTTPS)
+sudo certbot --nginx -d lattice.yourdomain.com
+```
+
+Certbot will automatically modify the Nginx config to listen on port 443 with SSL and redirect HTTP to HTTPS.
+
+Finally, configure the firewall to only allow web traffic:
+
+```bash
+sudo ufw allow 'Nginx Full'   # allows ports 80 and 443
+sudo ufw deny 3377             # block direct access to Fastify
+sudo ufw enable
+```
+
+Verify it works:
+
+```bash
+curl https://lattice.yourdomain.com/api/health
+# Expected: {"ok":true,"version":"0.1.0"}
+```
 
 ### 3. Install hooks on each machine
 
