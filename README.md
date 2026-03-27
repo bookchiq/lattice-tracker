@@ -51,18 +51,31 @@ curl https://lattice.yourdomain.com/api/health
 # Expected: {"ok":true,"version":"0.1.0"}
 ```
 
-### 3. Install hooks on each machine
+### 3. Set up each machine
+
+Lattice has two parts that are installed separately on each machine:
+
+**a) Install the Claude Code plugin** (gives you `/lattice:checkpoint`, `/lattice:status`, and other slash commands):
 
 ```bash
+claude plugin add bookchiq/lattice-tracker
+```
+
+**b) Install hooks and config** (gives you automatic session tracking, git snapshots, and heartbeat):
+
+```bash
+git clone git@github.com:bookchiq/lattice-tracker.git
 cd lattice-tracker
 ./install-hooks.sh
 ```
 
 The installer prompts for your API URL, token, and device label. It:
-- Writes config to `~/.config/lattice/`
+- Writes config to `~/.config/lattice/` (API token, device label)
 - Copies hook scripts to `~/.claude/hooks/lattice/`
-- Merges hook configuration into `~/.claude/settings.json`
+- Merges hook event configuration into `~/.claude/settings.json`
 - Installs a launchd heartbeat agent (every 3 minutes)
+
+> **Why two steps?** The plugin system handles slash commands and skills, but Claude Code plugins can't write config files, install hooks, or set up launchd agents. The install script handles the parts the plugin system can't.
 
 ### 4. Open the dashboard
 
