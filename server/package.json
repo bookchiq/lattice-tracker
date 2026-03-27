@@ -1,0 +1,23 @@
+{
+  "name": "lattice-tracker-server",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node --env-file=.env src/index.js",
+    "dev": "node --env-file=.env --watch src/index.js",
+    "test": "node --test test/**/*.test.js"
+  },
+  "dependencies": {
+    "fastify": "^5.8.4",
+    "fastify-plugin": "^5.0.0",
+    "@fastify/static": "^9.0.0",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/rate-limit": "^10.2.1",
+    "better-sqlite3": "^12.6.2"
+  },
+  "devDependencies": {}
+}
