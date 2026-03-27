@@ -28,42 +28,59 @@ pm2 save
 pm2 startup  # follow printed instructions
 ```
 
-### 2. Set up Nginx reverse proxy
+### 2. Set up reverse proxy (Caddy example)
 
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name lattice.yourdomain.com;
+Add to your Caddyfile (typically `/etc/caddy/Caddyfile`):
 
-    ssl_certificate /etc/letsencrypt/live/lattice.yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/lattice.yourdomain.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:3377;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+```
+lattice.yourdomain.com {
+    reverse_proxy 127.0.0.1:3377
 }
 ```
 
-Set up SSL with: `sudo certbot --nginx -d lattice.yourdomain.com`
+Then reload Caddy: `sudo systemctl reload caddy`
 
-**Important:** Never expose port 3377 directly. Use `ufw allow 443` only.
+Caddy handles SSL automatically. If you're using nginx or another reverse proxy instead, point it at `127.0.0.1:3377` and configure SSL separately.
 
-### 3. Install hooks on each machine
+**Important:** Never expose port 3377 directly. Only allow 80/443 through your firewall.
+
+Verify it works:
 
 ```bash
+curl https://lattice.yourdomain.com/api/health
+# Expected: {"ok":true,"version":"0.1.0"}
+```
+
+### 3. Set up each machine
+
+Lattice has two parts that are installed separately on each machine:
+
+**a) Install the Claude Code plugin** (gives you `/lattice:checkpoint`, `/lattice:status`, and other slash commands):
+
+Inside a Claude Code session, run:
+
+```
+/plugin marketplace add bookchiq/lattice-tracker
+/plugin install lattice@bookchiq-lattice-tracker
+```
+
+Or use `/plugin` and browse the **Discover** tab to find and install it interactively.
+
+**b) Install hooks and config** (gives you automatic session tracking, git snapshots, and heartbeat):
+
+```bash
+git clone git@github.com:bookchiq/lattice-tracker.git
 cd lattice-tracker
 ./install-hooks.sh
 ```
 
 The installer prompts for your API URL, token, and device label. It:
-- Writes config to `~/.config/lattice/`
+- Writes config to `~/.config/lattice/` (API token, device label)
 - Copies hook scripts to `~/.claude/hooks/lattice/`
-- Merges hook configuration into `~/.claude/settings.json`
+- Merges hook event configuration into `~/.claude/settings.json`
 - Installs a launchd heartbeat agent (every 3 minutes)
+
+> **Why two steps?** The plugin system handles slash commands and skills, but Claude Code plugins can't write config files, install hooks, or set up launchd agents. The install script handles the parts the plugin system can't.
 
 ### 4. Open the dashboard
 
