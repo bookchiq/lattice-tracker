@@ -10,23 +10,28 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/git-snapshot.sh"
 
-# Extract fields from stdin JSON
-SESSION_ID="$(echo "$INPUT" | jq -r '.session_id // empty')"
-CWD="$(echo "$INPUT" | jq -r '.cwd // empty')"
+# Extract fields from stdin JSON (single jq call)
+read -r SESSION_ID CWD <<< "$(echo "$INPUT" | jq -r '[.session_id // "", .cwd // ""] | @tsv')"
 
 if [ -z "$SESSION_ID" ]; then
   exit 0
 fi
 
+# Validate session_id against path traversal
+if [[ ! "$SESSION_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  lattice_log "ERROR: Invalid session_id: ${SESSION_ID}"
+  exit 0
+fi
+
 # Change to the working directory if provided
-if [ -n "$CWD" ]; then
+if [ -n "$CWD" ] && [ -d "$CWD" ]; then
   cd "$CWD" 2>/dev/null || true
 fi
 
 # Detect project
 lattice_detect_project
 
-# Detect interface (inline — 5 lines)
+# Detect interface (inline)
 if [ -n "${VSCODE_PID:-}" ] || [ -n "${VSCODE_INJECTION:-}" ]; then
   INTERFACE="vscode"
 elif [ -n "${TERM_PROGRAM:-}" ]; then
@@ -65,6 +70,7 @@ BATCH_JSON="$(jq -n \
   --arg interface "$INTERFACE" \
   --arg device_label "${LATTICE_DEVICE_LABEL:-}" \
   --arg git_remote_url "$LATTICE_GIT_REMOTE_URL" \
+  --arg cwd "$CWD" \
   --argjson snapshot "$LATTICE_GIT_SNAPSHOT_JSON" \
   '[
     {
@@ -77,7 +83,7 @@ BATCH_JSON="$(jq -n \
         interface: $interface,
         device_label: $device_label,
         git_remote_url: $git_remote_url,
-        cwd: $session_id
+        cwd: $cwd
       }
     },
     {
@@ -95,18 +101,16 @@ lattice_emit_batch "$BATCH_JSON"
 # --- Checkpoint injection (best-effort) ---
 CHECKPOINT_JSON=""
 
-# Try to fetch latest checkpoint from API
+# Try to fetch latest checkpoint from API (token via header file)
 CHECKPOINT_RESPONSE="$(curl -s \
   --max-time 1 \
   --connect-timeout 0.5 \
-  -H "Authorization: Bearer ${LATTICE_API_TOKEN}" \
+  -H @"$LATTICE_AUTH_HEADER_FILE" \
   "${LATTICE_API_URL}/api/projects/${LATTICE_PROJECT_ID}/checkpoints?limit=1" 2>/dev/null)" || true
 
 if [ -n "$CHECKPOINT_RESPONSE" ]; then
-  # Parse response — expects { data: [...] } envelope
   CHECKPOINT_JSON="$(echo "$CHECKPOINT_RESPONSE" | jq -r '.data[0] // empty' 2>/dev/null)" || true
 
-  # Cache it locally for offline fallback
   if [ -n "$CHECKPOINT_JSON" ] && [ "$CHECKPOINT_JSON" != "null" ]; then
     CACHE_DIR="${LATTICE_CONFIG_DIR}/last-checkpoint"
     mkdir -p "$CACHE_DIR"
@@ -122,13 +126,15 @@ if [ -z "$CHECKPOINT_JSON" ] || [ "$CHECKPOINT_JSON" = "null" ]; then
   fi
 fi
 
-# Build additionalContext if we have a checkpoint
+# Build additionalContext if we have a checkpoint (single jq call for all fields)
 if [ -n "$CHECKPOINT_JSON" ] && [ "$CHECKPOINT_JSON" != "null" ]; then
-  SUMMARY="$(echo "$CHECKPOINT_JSON" | jq -r '.summary // "No summary"')"
-  IN_PROGRESS="$(echo "$CHECKPOINT_JSON" | jq -r '.in_progress // "None"')"
-  NEXT_STEPS="$(echo "$CHECKPOINT_JSON" | jq -r '.next_steps // "None"')"
-  BRANCH="$(echo "$CHECKPOINT_JSON" | jq -r '.branch // "unknown"')"
-  LAST_COMMIT="$(echo "$CHECKPOINT_JSON" | jq -r '.last_commit // "unknown"')"
+  read -r SUMMARY IN_PROGRESS NEXT_STEPS BRANCH LAST_COMMIT <<< "$(echo "$CHECKPOINT_JSON" | jq -r '[
+    .summary // "No summary",
+    .in_progress // "None",
+    .next_steps // "None",
+    .branch // "unknown",
+    .last_commit // "unknown"
+  ] | @tsv')"
 
   CONTEXT="--- Lattice Checkpoint (last session on this project) ---
 Summary: ${SUMMARY}
@@ -147,7 +153,6 @@ Available Lattice commands:
 Lattice API: ${LATTICE_API_URL}
 ---"
 
-  # Output hookSpecificOutput for Claude Code to inject
   jq -n --arg ctx "$CONTEXT" '{
     hookSpecificOutput: {
       hookEventName: "SessionStart",

@@ -2,13 +2,14 @@
 # Lattice Tracker — Notification hook
 # Fires when Claude Code sends a notification.
 # Detects "waiting for input" notifications and emits session.waiting event.
-# Fast path: no jq, no sourcing unless needed.
+# Fast path: no jq, no sourcing, no forks unless needed.
 set -o pipefail
 
-INPUT="$(cat)"
+# Read stdin without forking
+INPUT=""
+while IFS= read -r line; do INPUT+="$line"; done
 
 # Fast path: check if this is a waiting-for-input notification using bash string matching
-# The notification_type field indicates what kind of notification this is
 if [[ "$INPUT" != *'"idle_prompt"'* ]] && [[ "$INPUT" != *'"permission_prompt"'* ]]; then
   exit 0
 fi

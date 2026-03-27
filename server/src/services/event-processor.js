@@ -101,7 +101,7 @@ export function createEventProcessor(queries) {
           commit_message: payload.commit_message,
           has_uncommitted_changes: payload.has_uncommitted_changes,
           uncommitted_summary: payload.uncommitted_summary,
-          trigger_type: event.event_type.replace('git.', ''),
+          trigger_type: payload.trigger_type || event.event_type.replace('git.', ''),
         });
         break;
 

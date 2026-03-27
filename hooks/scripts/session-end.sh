@@ -10,10 +10,22 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/git-snapshot.sh"
 
-SESSION_ID="$(echo "$INPUT" | jq -r '.session_id // empty')"
+# Extract fields (single jq call)
+read -r SESSION_ID CWD <<< "$(echo "$INPUT" | jq -r '[.session_id // "", .cwd // ""] | @tsv')"
 
 if [ -z "$SESSION_ID" ]; then
   exit 0
+fi
+
+# Validate session_id against path traversal
+if [[ ! "$SESSION_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  lattice_log "ERROR: Invalid session_id: ${SESSION_ID}"
+  exit 0
+fi
+
+# Change to project directory if provided
+if [ -n "$CWD" ] && [ -d "$CWD" ]; then
+  cd "$CWD" 2>/dev/null || true
 fi
 
 # Detect project and capture git state
