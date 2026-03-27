@@ -280,9 +280,9 @@ describe('Checkpoints', () => {
       headers: authHeader(),
     });
     assert.equal(res.statusCode, 200);
-    const checkpoints = JSON.parse(res.body);
-    assert.equal(checkpoints.length, 1);
-    assert.equal(checkpoints[0].summary, 'Working on SSO integration');
-    assert.equal(checkpoints[0].branch, 'feat/sso');
+    const body = JSON.parse(res.body);
+    assert.equal(body.data.length, 1);
+    assert.equal(body.data[0].summary, 'Working on SSO integration');
+    assert.equal(body.data[0].branch, 'feat/sso');
   });
 });

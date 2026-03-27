@@ -140,22 +140,22 @@ describe('P2-012: Project status filter', () => {
 
   it('filters projects by status=active', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/projects?status=active', headers: authHeader() });
-    const projects = JSON.parse(res.body);
-    assert.equal(projects.length, 1);
-    assert.equal(projects[0].id, 'github.com:test:active');
+    const body = JSON.parse(res.body);
+    assert.equal(body.data.length, 1);
+    assert.equal(body.data[0].id, 'github.com:test:active');
   });
 
   it('filters projects by status=idle', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/projects?status=idle', headers: authHeader() });
-    const projects = JSON.parse(res.body);
-    assert.equal(projects.length, 1);
-    assert.equal(projects[0].id, 'github.com:test:idle');
+    const body = JSON.parse(res.body);
+    assert.equal(body.data.length, 1);
+    assert.equal(body.data[0].id, 'github.com:test:idle');
   });
 
   it('returns all projects with no status filter', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/projects', headers: authHeader() });
-    const projects = JSON.parse(res.body);
-    assert.equal(projects.length, 2);
+    const body = JSON.parse(res.body);
+    assert.equal(body.data.length, 2);
   });
 });
 

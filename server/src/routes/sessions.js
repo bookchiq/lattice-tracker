@@ -16,7 +16,8 @@ export default async function sessionRoutes(fastify) {
     const { status, hostname } = request.query;
     const limit = clampInt(request.query.limit, 50, 200);
     const offset = clampOffset(request.query.offset);
-    return queries.getSessions({ status, hostname, limit, offset });
+    const sessions = queries.getSessions({ status, hostname, limit, offset });
+    return { data: sessions, limit, offset };
   });
 
   // GET /api/sessions/:id
@@ -37,6 +38,7 @@ export default async function sessionRoutes(fastify) {
   fastify.get('/sessions/:id/events', async (request) => {
     const limit = clampInt(request.query.limit, 100, 200);
     const offset = clampOffset(request.query.offset);
-    return queries.getEventsBySessionId(request.params.id, { limit, offset });
+    const events = queries.getEventsBySessionId(request.params.id, { limit, offset });
+    return { data: events, limit, offset };
   });
 }

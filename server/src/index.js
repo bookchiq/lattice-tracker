@@ -1,58 +1,6 @@
-import Fastify from 'fastify';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import cors from '@fastify/cors';
-import fastifyStatic from '@fastify/static';
-import rateLimit from '@fastify/rate-limit';
-import configPlugin from './plugins/config.js';
-import dbPlugin from './plugins/db.js';
-import authPlugin from './plugins/auth.js';
-import eventRoutes from './routes/events.js';
-import projectRoutes from './routes/projects.js';
-import sessionRoutes from './routes/sessions.js';
-import healthRoutes from './routes/health.js';
+import { buildApp } from './app.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const fastify = Fastify({ logger: true });
-
-// Plugins (order matters)
-await fastify.register(configPlugin);
-
-await fastify.register(cors, {
-  origin: fastify.config.dashboardOrigin,
-  methods: ['GET', 'POST', 'PATCH'],
-});
-
-await fastify.register(dbPlugin);
-await fastify.register(authPlugin);
-
-await fastify.register(rateLimit, {
-  max: 100,
-  timeWindow: '1 minute',
-});
-
-// Security headers
-fastify.addHook('onSend', async (request, reply) => {
-  reply.header('X-Content-Type-Options', 'nosniff');
-  reply.header('X-Frame-Options', 'DENY');
-  reply.header('X-XSS-Protection', '0');
-  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-  if (request.url.startsWith('/api/')) return;
-  reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'");
-});
-
-// Static dashboard
-await fastify.register(fastifyStatic, {
-  root: path.join(__dirname, '..', 'dashboard'),
-  prefix: '/',
-});
-
-// API routes
-await fastify.register(healthRoutes, { prefix: '/api' });
-await fastify.register(eventRoutes, { prefix: '/api' });
-await fastify.register(projectRoutes, { prefix: '/api' });
-await fastify.register(sessionRoutes, { prefix: '/api' });
+const fastify = await buildApp({ logger: true });
 
 // Graceful shutdown
 const shutdown = async (signal) => {

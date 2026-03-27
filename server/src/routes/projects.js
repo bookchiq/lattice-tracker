@@ -14,7 +14,8 @@ export default async function projectRoutes(fastify) {
   // GET /api/projects
   fastify.get('/projects', async (request) => {
     const { client_tag, status } = request.query;
-    return queries.getProjects({ client_tag, status });
+    const projects = queries.getProjects({ client_tag, status });
+    return { data: projects };
   });
 
   // GET /api/projects/:id
@@ -41,14 +42,16 @@ export default async function projectRoutes(fastify) {
   fastify.get('/projects/:id/sessions', async (request) => {
     const limit = clampInt(request.query.limit, 20, 200);
     const offset = clampOffset(request.query.offset);
-    return queries.getSessionsByProjectId(request.params.id, { limit, offset });
+    const sessions = queries.getSessionsByProjectId(request.params.id, { limit, offset });
+    return { data: sessions, limit, offset };
   });
 
   // GET /api/projects/:id/checkpoints
   fastify.get('/projects/:id/checkpoints', async (request) => {
     const limit = clampInt(request.query.limit, 1, 200);
     const offset = clampOffset(request.query.offset);
-    return queries.getCheckpointsByProjectId(request.params.id, { limit, offset });
+    const checkpoints = queries.getCheckpointsByProjectId(request.params.id, { limit, offset });
+    return { data: checkpoints, limit, offset };
   });
 
   // PATCH /api/projects/:id
