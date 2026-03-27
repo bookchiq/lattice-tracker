@@ -406,7 +406,7 @@ Static SPA served by Fastify, dark mode, mobile-friendly.
 
 **Tasks:**
 
-- [ ] Create `server/dashboard/index.html`
+- [x] Create `server/dashboard/index.html`
   - Single HTML file with semantic structure
   - Three views via show/hide containers (no hash router — overkill for 3 views). Use `data-view` attributes and a `showView(name)` function. Project detail uses `showProjectDetail(id)` with dynamic fetch.
   - Tab-style nav bar with active indicator
@@ -419,7 +419,7 @@ Static SPA served by Fastify, dark mode, mobile-friendly.
 
 > Hash-based routing was replaced with simple show/hide containers — three views don't need a router. This eliminates URL parsing, route matching, render dispatch, and back-button handling. The `<template>` element + `cloneNode` pattern is the recommended vanilla JS approach for repeated card elements — it's faster than `innerHTML` and preserves DOM state during polling updates. Use `morphdom` (3KB) if innerHTML convenience is needed later.
 
-- [ ] Create `server/dashboard/style.css`
+- [x] Create `server/dashboard/style.css`
   - Dark mode default using CSS `light-dark()` function (supported in all browsers since mid-2024):
     ```css
     :root {
@@ -440,7 +440,7 @@ Static SPA served by Fastify, dark mode, mobile-friendly.
 
 > The `light-dark()` CSS function co-locates both color values on a single line, eliminating duplicated `@media (prefers-color-scheme)` blocks. `color-mix(in srgb, var(--color-success) 15%, transparent)` creates transparent badge backgrounds from the text color — keeps the palette consistent. `100dvh` (not `100vh`) accounts for mobile browser chrome (URL bar) that dynamically appears/disappears.
 
-- [ ] Create `server/dashboard/app.js`
+- [x] Create `server/dashboard/app.js`
   - Vanilla JS, no framework
   - `apiFetch(path)` helper: fetch with bearer token from `sessionStorage`, auto-redirect to login on 401
   - Polling via `createPoller()` utility:
@@ -465,14 +465,14 @@ Static SPA served by Fastify, dark mode, mobile-friendly.
 > Replacing the DOM on every poll (via `innerHTML`) resets scroll position, focus state, and expanded details — terrible UX for a "mission control" dashboard. The `reconcileList()` pattern diffs by element `data-id`, updates only changed fields in existing cards, and creates/removes cards as needed. Combined with `visibilitychange` pausing, this means the dashboard uses zero resources when backgrounded. `Intl.RelativeTimeFormat` with `numeric: 'auto'` is locale-aware and produces natural language ("yesterday", "last month") — significantly better readability than "1 day ago".
 
 **Acceptance criteria:**
-- [ ] Dashboard loads at `/` and prompts for token if not set
-- [ ] Token is cleared from URL hash after reading
-- [ ] Project list shows projects with correct status indicators and relative timestamps
-- [ ] Project detail shows session history, git state, and latest checkpoint
-- [ ] Active sessions view auto-refreshes and surfaces waiting-for-input sessions prominently
-- [ ] Polling pauses when tab is hidden, resumes when visible
-- [ ] Works on mobile Safari (iPhone viewport)
-- [ ] All data visible in dashboard is also available via API endpoints
+- [x] Dashboard loads at `/` and prompts for token if not set
+- [x] Token is cleared from URL hash after reading
+- [x] Project list shows projects with correct status indicators and relative timestamps
+- [x] Project detail shows session history, git state, and latest checkpoint
+- [x] Active sessions view auto-refreshes and surfaces waiting-for-input sessions prominently
+- [x] Polling pauses when tab is hidden, resumes when visible
+- [x] Works on mobile Safari (iPhone viewport)
+- [x] All data visible in dashboard is also available via API endpoints
 
 #### Phase 4: Installation, Deployment, and Plugin
 

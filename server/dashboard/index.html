@@ -4,17 +4,91 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark light">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';">
   <title>Lattice</title>
-  <style>
-    body { font-family: system-ui, sans-serif; background: #0f0f0f; color: #e8e8e8; display: grid; place-items: center; min-height: 100dvh; margin: 0; }
-    h1 { font-size: 1.5rem; font-weight: 600; }
-    p { color: #999; }
-  </style>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <main>
-    <h1>Lattice Dashboard</h1>
-    <p>Dashboard coming in Phase 3.</p>
-  </main>
+
+  <!-- Auth screen -->
+  <div id="auth-screen" class="auth-screen" hidden>
+    <form class="auth-form" id="auth-form">
+      <h1>Lattice</h1>
+      <p>Enter your API token to access the dashboard.</p>
+      <input type="password" id="token-input" placeholder="Bearer token" autocomplete="off" required>
+      <button type="submit">Connect</button>
+    </form>
+  </div>
+
+  <!-- Main app -->
+  <div id="app" class="app" hidden>
+    <div class="error-banner" id="error-banner">Unable to reach the Lattice API</div>
+
+    <header class="topbar">
+      <span class="topbar-brand">Lattice</span>
+      <div class="topbar-actions">
+        <span class="last-updated" id="last-updated"></span>
+        <button class="btn-logout" id="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <nav class="tab-nav" id="tab-nav">
+      <button data-view="projects" class="active">Projects</button>
+      <button data-view="active">Active Sessions</button>
+    </nav>
+
+    <main class="main">
+      <!-- Projects view -->
+      <div class="view active" id="view-projects">
+        <div class="card-grid" id="project-list"></div>
+        <div class="empty-state" id="projects-empty" hidden>
+          <p>No projects tracked yet. Start a Claude Code session to begin.</p>
+        </div>
+      </div>
+
+      <!-- Active sessions view -->
+      <div class="view" id="view-active">
+        <div class="card-grid" id="session-list"></div>
+        <div class="empty-state" id="sessions-empty" hidden>
+          <p>No active sessions right now.</p>
+        </div>
+      </div>
+
+      <!-- Project detail view -->
+      <div class="view" id="view-detail"></div>
+    </main>
+  </div>
+
+  <!-- Templates -->
+  <template id="tpl-project-card">
+    <div class="card" data-id="">
+      <div class="card-header">
+        <span class="card-title" data-field="name"></span>
+        <span class="badge" data-field="status"></span>
+      </div>
+      <div class="card-meta">
+        <span data-field="tag"></span>
+        <span data-field="activity"></span>
+        <span data-field="device"></span>
+      </div>
+      <span class="card-branch" data-field="branch"></span>
+    </div>
+  </template>
+
+  <template id="tpl-session-card">
+    <div class="card" data-id="">
+      <div class="card-header">
+        <span class="card-title" data-field="project"></span>
+        <span class="badge" data-field="status"></span>
+      </div>
+      <div class="card-meta">
+        <span data-field="device"></span>
+        <span data-field="interface"></span>
+        <span data-field="started" data-time=""></span>
+      </div>
+    </div>
+  </template>
+
+  <script src="/app.js"></script>
 </body>
 </html>
