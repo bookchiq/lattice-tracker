@@ -1,6 +1,6 @@
 #!/bin/bash
 # Lattice Tracker — Install Script
-# Sets up hooks, config, and heartbeat on a macOS machine.
+# Sets up hooks, config, and heartbeat. Supports macOS (launchd), Linux (systemd/cron).
 set -o pipefail
 
 echo "=== Lattice Tracker Installer ==="
@@ -133,14 +133,15 @@ else
   exit 1
 fi
 
-# --- Install heartbeat launchd plist ---
-PLIST_NAME="com.lattice.heartbeat"
-PLIST_DIR="${HOME}/Library/LaunchAgents"
-PLIST_FILE="${PLIST_DIR}/${PLIST_NAME}.plist"
+# --- Install heartbeat scheduler ---
+install_heartbeat_macos() {
+  local PLIST_NAME="com.lattice.heartbeat"
+  local PLIST_DIR="${HOME}/Library/LaunchAgents"
+  local PLIST_FILE="${PLIST_DIR}/${PLIST_NAME}.plist"
 
-mkdir -p "$PLIST_DIR"
+  mkdir -p "$PLIST_DIR"
 
-cat > "$PLIST_FILE" << PLISTEOF
+  cat > "$PLIST_FILE" << PLISTEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -171,10 +172,55 @@ cat > "$PLIST_FILE" << PLISTEOF
 </plist>
 PLISTEOF
 
-# Load the plist
-launchctl bootout "gui/$(id -u)/${PLIST_NAME}" 2>/dev/null
-launchctl bootstrap "gui/$(id -u)" "$PLIST_FILE"
-echo "  Heartbeat installed (every 3 minutes)"
+  launchctl bootout "gui/$(id -u)/${PLIST_NAME}" 2>/dev/null
+  launchctl bootstrap "gui/$(id -u)" "$PLIST_FILE"
+  echo "  Heartbeat installed via launchd (every 3 minutes)"
+}
+
+install_heartbeat_systemd() {
+  local TIMER_DIR="${HOME}/.config/systemd/user"
+  mkdir -p "$TIMER_DIR"
+
+  cat > "${TIMER_DIR}/lattice-heartbeat.service" << SVCEOF
+[Unit]
+Description=Lattice Tracker heartbeat
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash ${HOOKS_DEST}/heartbeat.sh
+Environment=HOME=${HOME}
+SVCEOF
+
+  cat > "${TIMER_DIR}/lattice-heartbeat.timer" << TMREOF
+[Unit]
+Description=Lattice Tracker heartbeat timer
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=180
+
+[Install]
+WantedBy=timers.target
+TMREOF
+
+  systemctl --user daemon-reload
+  systemctl --user enable --now lattice-heartbeat.timer
+  echo "  Heartbeat installed via systemd timer (every 3 minutes)"
+}
+
+install_heartbeat_crontab() {
+  local CRON_LINE="*/3 * * * * /bin/bash ${HOOKS_DEST}/heartbeat.sh >> ${CONFIG_DIR}/heartbeat-stdout.log 2>> ${CONFIG_DIR}/heartbeat-stderr.log"
+  (crontab -l 2>/dev/null | grep -v "lattice/heartbeat.sh"; echo "$CRON_LINE") | crontab -
+  echo "  Heartbeat installed via crontab (every 3 minutes)"
+}
+
+if [[ "$(uname)" == "Darwin" ]]; then
+  install_heartbeat_macos
+elif command -v systemctl >/dev/null 2>&1 && systemctl --user status >/dev/null 2>&1; then
+  install_heartbeat_systemd
+else
+  install_heartbeat_crontab
+fi
 
 echo ""
 echo "=== Installation complete ==="

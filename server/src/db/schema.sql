@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS projects (
   canonical_name TEXT,
   display_name TEXT,
   client_tag TEXT,
+  metadata TEXT,
   last_activity_at TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
@@ -20,6 +21,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   started_at TEXT,
   last_heartbeat_at TEXT,
   ended_at TEXT,
+  last_prompt TEXT,
+  metadata TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 

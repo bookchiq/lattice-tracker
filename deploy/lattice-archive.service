@@ -1,0 +1,11 @@
+[Unit]
+Description=Lattice Tracker git archive export
+
+[Service]
+Type=oneshot
+User=lattice
+Group=lattice
+WorkingDirectory=/opt/lattice-tracker/server
+ExecStart=/usr/bin/node src/services/git-archive.js
+Environment=NODE_ENV=production
+EnvironmentFile=-/etc/lattice-tracker/env

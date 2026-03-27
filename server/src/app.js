@@ -10,6 +10,7 @@ import authPlugin from './plugins/auth.js';
 import eventRoutes from './routes/events.js';
 import projectRoutes from './routes/projects.js';
 import sessionRoutes from './routes/sessions.js';
+import snapshotRoutes from './routes/snapshots.js';
 import healthRoutes from './routes/health.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -86,6 +87,7 @@ export async function buildApp(opts = {}) {
     await api.register(eventRoutes);
     await api.register(projectRoutes);
     await api.register(sessionRoutes);
+    await api.register(snapshotRoutes);
   }, { prefix: '/api' });
 
   return app;
