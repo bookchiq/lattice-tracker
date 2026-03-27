@@ -17,9 +17,7 @@ if [ -z "$SESSION_ID" ]; then
   exit 0
 fi
 
-# Validate session_id against path traversal
-if [[ ! "$SESSION_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-  lattice_log "ERROR: Invalid session_id: ${SESSION_ID}"
+if ! lattice_validate_session_id "$SESSION_ID"; then
   exit 0
 fi
 
@@ -102,11 +100,12 @@ lattice_emit_batch "$BATCH_JSON"
 CHECKPOINT_JSON=""
 
 # Try to fetch latest checkpoint from API (token via header file)
+ENCODED_PROJECT_ID="$(lattice_urlencode "$LATTICE_PROJECT_ID")"
 CHECKPOINT_RESPONSE="$(curl -s \
   --max-time 1 \
   --connect-timeout 0.5 \
   -H @"$LATTICE_AUTH_HEADER_FILE" \
-  "${LATTICE_API_URL}/api/projects/${LATTICE_PROJECT_ID}/checkpoints?limit=1" 2>/dev/null)" || true
+  "${LATTICE_API_URL}/api/projects/${ENCODED_PROJECT_ID}/checkpoints?limit=1" 2>/dev/null)" || true
 
 if [ -n "$CHECKPOINT_RESPONSE" ]; then
   CHECKPOINT_JSON="$(echo "$CHECKPOINT_RESPONSE" | jq -r '.data[0] // empty' 2>/dev/null)" || true
@@ -114,13 +113,13 @@ if [ -n "$CHECKPOINT_RESPONSE" ]; then
   if [ -n "$CHECKPOINT_JSON" ] && [ "$CHECKPOINT_JSON" != "null" ]; then
     CACHE_DIR="${LATTICE_CONFIG_DIR}/last-checkpoint"
     mkdir -p "$CACHE_DIR"
-    echo "$CHECKPOINT_JSON" > "${CACHE_DIR}/${LATTICE_PROJECT_ID}.json" 2>/dev/null
+    echo "$CHECKPOINT_JSON" > "${CACHE_DIR}/${ENCODED_PROJECT_ID}.json" 2>/dev/null
   fi
 fi
 
 # Fallback to cached checkpoint if API fetch failed
 if [ -z "$CHECKPOINT_JSON" ] || [ "$CHECKPOINT_JSON" = "null" ]; then
-  CACHE_FILE="${LATTICE_CONFIG_DIR}/last-checkpoint/${LATTICE_PROJECT_ID}.json"
+  CACHE_FILE="${LATTICE_CONFIG_DIR}/last-checkpoint/${ENCODED_PROJECT_ID}.json"
   if [ -f "$CACHE_FILE" ]; then
     CHECKPOINT_JSON="$(cat "$CACHE_FILE" 2>/dev/null)" || true
   fi

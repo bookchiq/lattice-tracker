@@ -1,5 +1,9 @@
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { version } = require('../../package.json');
+
 export default async function healthRoutes(fastify) {
   fastify.get('/health', async () => {
-    return { ok: true, version: '0.1.0' };
+    return { ok: true, version };
   });
 }

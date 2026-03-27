@@ -37,6 +37,22 @@ export function createEventProcessor(queries) {
       });
     }
 
+    // 2b. For non-session.start events, ensure session exists (handles out-of-order delivery)
+    if (event.event_type !== 'session.start' && event.session_id) {
+      const existing = queries.getSessionById(event.session_id);
+      if (!existing) {
+        queries.upsertSession({
+          id: event.session_id,
+          project_id: projectId,
+          hostname: event.hostname,
+          interface: null,
+          device_label: null,
+          status: 'unknown',
+          started_at: event.timestamp,
+        });
+      }
+    }
+
     // 3. Insert the event
     const result = queries.insertEvent(event);
 

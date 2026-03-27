@@ -21,7 +21,10 @@ export default async function eventRoutes(fastify) {
   const processBatch = fastify.db.transaction((evts) => {
     return evts.map((evt) => {
       const result = processEvent(evt);
-      return Number(result.lastInsertRowid);
+      return {
+        event_id: Number(result.lastInsertRowid),
+        status: result.duplicate ? 'duplicate' : 'created',
+      };
     });
   });
 
@@ -31,6 +34,12 @@ export default async function eventRoutes(fastify) {
     bodyLimit: 1048576, // 1MB
   }, async (request, reply) => {
     const result = processInTransaction(request.body);
+
+    if (result.duplicate) {
+      reply.code(409);
+      return { ok: false, error: 'duplicate_event', event_id: Number(result.lastInsertRowid) };
+    }
+
     reply.code(201);
     return { ok: true, event_id: Number(result.lastInsertRowid) };
   });
@@ -46,8 +55,8 @@ export default async function eventRoutes(fastify) {
     },
     bodyLimit: 5242880, // 5MB
   }, async (request, reply) => {
-    const eventIds = processBatch(request.body);
+    const results = processBatch(request.body);
     reply.code(201);
-    return { ok: true, event_ids: eventIds };
+    return { ok: true, results };
   });
 }

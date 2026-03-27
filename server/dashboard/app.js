@@ -121,6 +121,7 @@ function createPoller(fetchFn, { interval = 15000, maxInterval = 60000, maxError
       errorCount = 0;
       document.getElementById('error-banner').classList.remove('visible');
       schedule(interval);
+      document.getElementById('last-updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
     } catch (err) {
       errorCount++;
       if (errorCount >= maxErrors) {
@@ -131,7 +132,6 @@ function createPoller(fetchFn, { interval = 15000, maxInterval = 60000, maxError
       const backoff = Math.min(interval * 2 ** errorCount + Math.random() * 1000, maxInterval);
       schedule(backoff);
     }
-    document.getElementById('last-updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   }
 
   function schedule(ms) {
@@ -169,12 +169,10 @@ function showView(name) {
     view.classList.toggle('active', view.id === `view-${name}`);
   }
 
-  // Load data
+  // Load data (createPoller calls fetchFn immediately, no separate load needed)
   if (name === 'projects') {
-    loadProjects();
     projectsPoller = createPoller(loadProjects, { interval: 60000 });
   } else if (name === 'active') {
-    loadActiveSessions();
     sessionsPoller = createPoller(loadActiveSessions, { interval: 15000 });
   }
 }
@@ -208,15 +206,9 @@ function badgeClass(status) {
 // --- Project list ---
 
 async function loadProjects() {
-  const body = await apiFetch('/projects');
+  const body = await apiFetch('/projects?include=latest');
   const projects = body.data || [];
-
-  // Fetch detail for each to get latest_session (the list endpoint doesn't include it)
-  const detailed = await Promise.all(
-    projects.map(p => apiFetch(`/projects/${encodeURIComponent(p.id)}`).catch(() => p))
-  );
-
-  renderProjectList(detailed);
+  renderProjectList(projects);
 }
 
 function renderProjectList(projects) {
@@ -313,11 +305,23 @@ function renderSessionList(sessions) {
   }
   empty.hidden = true;
 
+  // Reconcile: update existing, add new, remove stale
+  const existingMap = new Map();
+  for (const child of container.children) {
+    existingMap.set(child.dataset.id, child);
+  }
+
   const fragment = document.createDocumentFragment();
+  const newIds = new Set();
 
   for (const session of sessions) {
-    const el = tpl.content.cloneNode(true).firstElementChild;
-    el.dataset.id = session.id;
+    newIds.add(session.id);
+    let el = existingMap.get(session.id);
+
+    if (!el) {
+      el = tpl.content.cloneNode(true).firstElementChild;
+      el.dataset.id = session.id;
+    }
 
     el.classList.toggle('waiting', session.status === 'waiting_for_input');
 
@@ -384,7 +388,7 @@ function renderProjectDetail(project, sessions) {
       <div>
         <h2 class="detail-title">${escapeHtml(name)}</h2>
         <div class="detail-id">${escapeHtml(project.id)}</div>
-        ${project.client_tag ? `<span class="badge badge-tag" style="margin-top:8px">${escapeHtml(project.client_tag)}</span>` : ''}
+        ${project.client_tag ? `<span class="badge badge-tag detail-tag">${escapeHtml(project.client_tag)}</span>` : ''}
       </div>
       <button class="btn-back" id="btn-back">Back to projects</button>
     </div>
@@ -398,7 +402,7 @@ function renderProjectDetail(project, sessions) {
         <div class="git-state">
           <div>Branch: <strong>${escapeHtml(snapshot.branch || 'unknown')}</strong></div>
           <div>Commit: ${escapeHtml(snapshot.commit_hash || '')} ${escapeHtml(snapshot.commit_message || '')}</div>
-          ${snapshot.has_uncommitted_changes ? '<div style="color:var(--color-warning)">Has uncommitted changes</div>' : ''}
+          ${snapshot.has_uncommitted_changes ? '<div class="uncommitted-warning">Has uncommitted changes</div>' : ''}
         </div>
       </div>
     `;
@@ -431,7 +435,7 @@ function renderProjectDetail(project, sessions) {
         <div class="session-item">
           <div>
             <span class="${badgeClass(s.status)}">${statusLabel(s.status)}</span>
-            <span style="margin-left:8px;font-size:0.8125rem;color:var(--color-text-muted)">${escapeHtml(s.id)}</span>
+            <span class="session-id-label">${escapeHtml(s.id)}</span>
           </div>
           <div class="session-item-meta">
             <span>${escapeHtml(s.device_label || s.hostname || '')}</span>
@@ -456,9 +460,8 @@ function renderProjectDetail(project, sessions) {
 
 function escapeHtml(str) {
   if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return String(str).replace(/[&<>"']/g, c => map[c]);
 }
 
 // --- Init ---

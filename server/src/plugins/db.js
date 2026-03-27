@@ -28,7 +28,7 @@ async function dbPlugin(fastify) {
     fastify.log.info('Applied migration 1: initial schema');
   }
 
-  // Stale session cleanup on startup
+  // Stale session cleanup
   const staleCleanup = db.prepare(`
     UPDATE sessions
     SET status = 'abandoned'
@@ -36,15 +36,24 @@ async function dbPlugin(fastify) {
       AND last_heartbeat_at IS NOT NULL
       AND last_heartbeat_at < datetime('now', '-10 minutes')
   `);
-  const staleResult = staleCleanup.run();
-  if (staleResult.changes > 0) {
-    fastify.log.info(`Marked ${staleResult.changes} stale session(s) as abandoned`);
+
+  function cleanupStaleSessions() {
+    const result = staleCleanup.run();
+    if (result.changes > 0) {
+      fastify.log.info(`Marked ${result.changes} stale session(s) as abandoned`);
+    }
   }
+
+  // Run at startup and every 5 minutes
+  cleanupStaleSessions();
+  const cleanupTimer = setInterval(cleanupStaleSessions, 5 * 60 * 1000);
 
   fastify.decorate('db', db);
   fastify.decorate('queries', createQueries(db));
 
   fastify.addHook('onClose', async (instance) => {
+    clearInterval(cleanupTimer);
+    instance.db.pragma('optimize');
     instance.db.close();
     instance.log.info('Database connection closed');
   });

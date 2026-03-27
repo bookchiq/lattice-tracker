@@ -1,12 +1,4 @@
-function clampInt(val, fallback, max) {
-  const n = parseInt(val || String(fallback), 10);
-  return Math.min(Math.max(isNaN(n) ? fallback : n, 1), max);
-}
-
-function clampOffset(val) {
-  const n = parseInt(val || '0', 10);
-  return Math.max(isNaN(n) ? 0 : n, 0);
-}
+import { clampInt, clampOffset } from '../utils/pagination.js';
 
 export default async function sessionRoutes(fastify) {
   const queries = fastify.queries;
@@ -29,7 +21,7 @@ export default async function sessionRoutes(fastify) {
     }
 
     const events = queries.getEventsBySessionId(session.id, { limit: 100 });
-    const snapshots = queries.getSnapshotsByProjectId(session.project_id, { limit: 20 });
+    const snapshots = queries.getSnapshotsBySessionId(session.id, { limit: 20 });
 
     return { ...session, events, snapshots };
   });

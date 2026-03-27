@@ -1,21 +1,26 @@
-function clampInt(val, fallback, max) {
-  const n = parseInt(val || String(fallback), 10);
-  return Math.min(Math.max(isNaN(n) ? fallback : n, 1), max);
-}
-
-function clampOffset(val) {
-  const n = parseInt(val || '0', 10);
-  return Math.max(isNaN(n) ? 0 : n, 0);
-}
+import { clampInt, clampOffset } from '../utils/pagination.js';
 
 export default async function projectRoutes(fastify) {
   const queries = fastify.queries;
 
   // GET /api/projects
   fastify.get('/projects', async (request) => {
-    const { client_tag, status } = request.query;
-    const projects = queries.getProjects({ client_tag, status });
-    return { data: projects };
+    const { client_tag, status, include } = request.query;
+    const limit = clampInt(request.query.limit, 50, 200);
+    const offset = clampOffset(request.query.offset);
+    const projects = queries.getProjects({ client_tag, status, limit, offset });
+
+    let data = projects;
+    if (include === 'latest') {
+      data = projects.map(p => ({
+        ...p,
+        latest_session: queries.getSessionsByProjectId(p.id, { limit: 1 })[0] || null,
+        latest_snapshot: queries.getLatestSnapshot(p.id) || null,
+        latest_checkpoint: queries.getLatestCheckpoint(p.id) || null,
+      }));
+    }
+
+    return { data, limit, offset };
   });
 
   // GET /api/projects/:id

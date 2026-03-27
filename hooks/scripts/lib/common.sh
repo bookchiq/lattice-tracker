@@ -32,15 +32,12 @@ if [ -z "${LATTICE_API_URL:-}" ] || [ -z "${LATTICE_API_TOKEN:-}" ]; then
   return 0 2>/dev/null || exit 0
 fi
 
-# --- Auth header file (avoids exposing token in process list) ---
-LATTICE_AUTH_HEADER_FILE="$(mktemp "${LATTICE_CONFIG_DIR}/.auth-header.XXXXXX")"
-echo "Authorization: Bearer ${LATTICE_API_TOKEN}" > "$LATTICE_AUTH_HEADER_FILE"
-chmod 600 "$LATTICE_AUTH_HEADER_FILE"
-
-_lattice_cleanup_auth() {
-  rm -f "$LATTICE_AUTH_HEADER_FILE" 2>/dev/null
-}
-trap _lattice_cleanup_auth EXIT
+# --- Auth header file (reusable, avoids per-invocation temp files) ---
+LATTICE_AUTH_HEADER_FILE="${LATTICE_CONFIG_DIR}/.auth-header"
+if [ ! -f "$LATTICE_AUTH_HEADER_FILE" ] || ! grep -q "$LATTICE_API_TOKEN" "$LATTICE_AUTH_HEADER_FILE" 2>/dev/null; then
+  echo "Authorization: Bearer ${LATTICE_API_TOKEN}" > "$LATTICE_AUTH_HEADER_FILE"
+  chmod 600 "$LATTICE_AUTH_HEADER_FILE"
+fi
 
 # --- Event Emission ---
 
@@ -59,7 +56,8 @@ lattice_emit() {
 
   if [ "$http_code" != "201" ]; then
     lattice_log "FAILED event (HTTP ${http_code})"
-    echo "${event_json}" >> "${LATTICE_CONFIG_DIR}/failed-events.log" 2>/dev/null
+    echo "${event_json}" >> "${LATTICE_CONFIG_DIR}/failed-events.log"
+    chmod 600 "${LATTICE_CONFIG_DIR}/failed-events.log" 2>/dev/null
   fi
 }
 
@@ -96,8 +94,8 @@ lattice_detect_project() {
       | sed -E 's|^ssh://||; s|^https?://||; s|^git@||; s|:[0-9]+/|/|; s|:|/|; s|\.git$||; s|/+$||' \
       | tr '[:upper:]/' '[:lower:]:')"
 
-    # Reject project IDs containing path-traversal sequences
-    if [[ "$LATTICE_PROJECT_ID" == *".."* ]]; then
+    # Validate project ID: allow only safe characters
+    if [[ ! "$LATTICE_PROJECT_ID" =~ ^[a-zA-Z0-9:._-]+$ ]]; then
       LATTICE_PROJECT_ID="invalid:$(echo -n "$remote_url" | shasum -a 256 | cut -c1-16)"
     fi
   else
@@ -106,6 +104,35 @@ lattice_detect_project() {
     hash_input="$(hostname):$(pwd)"
     LATTICE_PROJECT_ID="local:$(echo -n "$hash_input" | shasum -a 256 | cut -c1-16)"
   fi
+}
+
+# --- Validation ---
+
+lattice_validate_session_id() {
+  local sid="$1"
+  if [ -z "$sid" ]; then
+    return 1
+  fi
+  if [[ ! "$sid" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    lattice_log "ERROR: Invalid session_id: ${sid}"
+    return 1
+  fi
+  return 0
+}
+
+# URL-encode a string for safe interpolation in curl URLs
+lattice_urlencode() {
+  local string="$1"
+  local encoded=""
+  local i c
+  for (( i=0; i<${#string}; i++ )); do
+    c="${string:$i:1}"
+    case "$c" in
+      [a-zA-Z0-9.~_:-]) encoded+="$c" ;;
+      *) encoded+="$(printf '%%%02X' "'$c")" ;;
+    esac
+  done
+  echo "$encoded"
 }
 
 # --- Hostname ---

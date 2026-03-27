@@ -469,6 +469,11 @@ body {
 
 .skeleton-card { height: 120px; }
 
+/* Detail view helpers (replaces inline styles for CSP compliance) */
+.detail-tag { margin-top: 8px; }
+.uncommitted-warning { color: var(--color-warning); }
+.session-id-label { margin-left: 8px; font-size: 0.8125rem; color: var(--color-text-muted); }
+
 /* Updated timestamp */
 .last-updated {
   font-size: 0.75rem;
