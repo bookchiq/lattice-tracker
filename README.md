@@ -28,63 +28,21 @@ pm2 save
 pm2 startup  # follow printed instructions
 ```
 
-### 2. Set up Nginx reverse proxy
+### 2. Set up reverse proxy (Caddy example)
 
-First, install Nginx and Certbot if not already installed:
+Add to your Caddyfile (typically `/etc/caddy/Caddyfile`):
 
-```bash
-sudo apt update
-sudo apt install nginx certbot python3-certbot-nginx
 ```
-
-Create a new Nginx site config file:
-
-```bash
-sudo nano /etc/nginx/sites-available/lattice
-```
-
-Paste this configuration (replace `lattice.yourdomain.com` with your actual domain):
-
-```nginx
-server {
-    listen 80;
-    server_name lattice.yourdomain.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:3377;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+lattice.yourdomain.com {
+    reverse_proxy 127.0.0.1:3377
 }
 ```
 
-Enable the site and get an SSL certificate:
+Then reload Caddy: `sudo systemctl reload caddy`
 
-```bash
-# Create a symlink to enable the site
-sudo ln -s /etc/nginx/sites-available/lattice /etc/nginx/sites-enabled/
+Caddy handles SSL automatically. If you're using nginx or another reverse proxy instead, point it at `127.0.0.1:3377` and configure SSL separately.
 
-# Test the config for syntax errors
-sudo nginx -t
-
-# Reload Nginx to pick up the new site
-sudo systemctl reload nginx
-
-# Get an SSL certificate (this will also update the config to add HTTPS)
-sudo certbot --nginx -d lattice.yourdomain.com
-```
-
-Certbot will automatically modify the Nginx config to listen on port 443 with SSL and redirect HTTP to HTTPS.
-
-Finally, configure the firewall to only allow web traffic:
-
-```bash
-sudo ufw allow 'Nginx Full'   # allows ports 80 and 443
-sudo ufw deny 3377             # block direct access to Fastify
-sudo ufw enable
-```
+**Important:** Never expose port 3377 directly. Only allow 80/443 through your firewall.
 
 Verify it works:
 
