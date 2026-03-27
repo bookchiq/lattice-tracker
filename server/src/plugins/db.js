@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createQueries } from '../db/queries.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,7 +32,7 @@ async function dbPlugin(fastify) {
   const staleCleanup = db.prepare(`
     UPDATE sessions
     SET status = 'abandoned'
-    WHERE status IN ('active', 'waiting_for_input')
+    WHERE status = 'active'
       AND last_heartbeat_at IS NOT NULL
       AND last_heartbeat_at < datetime('now', '-10 minutes')
   `);
@@ -41,6 +42,7 @@ async function dbPlugin(fastify) {
   }
 
   fastify.decorate('db', db);
+  fastify.decorate('queries', createQueries(db));
 
   fastify.addHook('onClose', async (instance) => {
     instance.db.close();

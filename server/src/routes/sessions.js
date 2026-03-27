@@ -1,17 +1,22 @@
-import { createQueries } from '../db/queries.js';
+function clampInt(val, fallback, max) {
+  const n = parseInt(val || String(fallback), 10);
+  return Math.min(Math.max(isNaN(n) ? fallback : n, 1), max);
+}
+
+function clampOffset(val) {
+  const n = parseInt(val || '0', 10);
+  return Math.max(isNaN(n) ? 0 : n, 0);
+}
 
 export default async function sessionRoutes(fastify) {
-  const queries = createQueries(fastify.db);
+  const queries = fastify.queries;
 
   // GET /api/sessions
   fastify.get('/sessions', async (request) => {
-    const { status, hostname, limit, offset } = request.query;
-    return queries.getSessions({
-      status,
-      hostname,
-      limit: parseInt(limit || '50', 10),
-      offset: parseInt(offset || '0', 10),
-    });
+    const { status, hostname } = request.query;
+    const limit = clampInt(request.query.limit, 50, 200);
+    const offset = clampOffset(request.query.offset);
+    return queries.getSessions({ status, hostname, limit, offset });
   });
 
   // GET /api/sessions/:id
@@ -30,8 +35,8 @@ export default async function sessionRoutes(fastify) {
 
   // GET /api/sessions/:id/events
   fastify.get('/sessions/:id/events', async (request) => {
-    const limit = parseInt(request.query.limit || '100', 10);
-    const offset = parseInt(request.query.offset || '0', 10);
+    const limit = clampInt(request.query.limit, 100, 200);
+    const offset = clampOffset(request.query.offset);
     return queries.getEventsBySessionId(request.params.id, { limit, offset });
   });
 }

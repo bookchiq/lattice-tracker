@@ -74,3 +74,6 @@ CREATE INDEX IF NOT EXISTS idx_sessions_project_status ON sessions(project_id, s
 CREATE INDEX IF NOT EXISTS idx_git_snapshots_project_id ON git_snapshots(project_id);
 CREATE INDEX IF NOT EXISTS idx_git_snapshots_session_id ON git_snapshots(session_id);
 CREATE INDEX IF NOT EXISTS idx_checkpoints_project_id_timestamp ON checkpoints(project_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_events_session_timestamp ON events(session_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_git_snapshots_project_timestamp ON git_snapshots(project_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_projects_client_tag ON projects(client_tag);

@@ -1,12 +1,20 @@
-import { createQueries } from '../db/queries.js';
+function clampInt(val, fallback, max) {
+  const n = parseInt(val || String(fallback), 10);
+  return Math.min(Math.max(isNaN(n) ? fallback : n, 1), max);
+}
+
+function clampOffset(val) {
+  const n = parseInt(val || '0', 10);
+  return Math.max(isNaN(n) ? 0 : n, 0);
+}
 
 export default async function projectRoutes(fastify) {
-  const queries = createQueries(fastify.db);
+  const queries = fastify.queries;
 
   // GET /api/projects
   fastify.get('/projects', async (request) => {
-    const { client_tag } = request.query;
-    return queries.getProjects({ client_tag });
+    const { client_tag, status } = request.query;
+    return queries.getProjects({ client_tag, status });
   });
 
   // GET /api/projects/:id
@@ -31,15 +39,15 @@ export default async function projectRoutes(fastify) {
 
   // GET /api/projects/:id/sessions
   fastify.get('/projects/:id/sessions', async (request) => {
-    const limit = parseInt(request.query.limit || '20', 10);
-    const offset = parseInt(request.query.offset || '0', 10);
+    const limit = clampInt(request.query.limit, 20, 200);
+    const offset = clampOffset(request.query.offset);
     return queries.getSessionsByProjectId(request.params.id, { limit, offset });
   });
 
   // GET /api/projects/:id/checkpoints
   fastify.get('/projects/:id/checkpoints', async (request) => {
-    const limit = parseInt(request.query.limit || '1', 10);
-    const offset = parseInt(request.query.offset || '0', 10);
+    const limit = clampInt(request.query.limit, 1, 200);
+    const offset = clampOffset(request.query.offset);
     return queries.getCheckpointsByProjectId(request.params.id, { limit, offset });
   });
 
@@ -49,8 +57,8 @@ export default async function projectRoutes(fastify) {
       body: {
         type: 'object',
         properties: {
-          display_name: { type: 'string' },
-          client_tag: { type: 'string' },
+          display_name: { type: 'string', maxLength: 255 },
+          client_tag: { type: 'string', maxLength: 255 },
         },
       },
     },

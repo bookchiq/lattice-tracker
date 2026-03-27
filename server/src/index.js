@@ -36,6 +36,10 @@ await fastify.register(rateLimit, {
 fastify.addHook('onSend', async (request, reply) => {
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('X-Frame-Options', 'DENY');
+  reply.header('X-XSS-Protection', '0');
+  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (request.url.startsWith('/api/')) return;
+  reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'");
 });
 
 // Static dashboard
@@ -62,7 +66,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 
 // Start
 try {
-  await fastify.listen({ port: fastify.config.port, host: '0.0.0.0' });
+  await fastify.listen({ port: fastify.config.port, host: fastify.config.host });
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);

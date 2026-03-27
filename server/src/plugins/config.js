@@ -10,7 +10,8 @@ async function configPlugin(fastify) {
     port: parseInt(process.env.PORT || '3377', 10),
     dbPath: process.env.LATTICE_DB_PATH || './lattice.db',
     apiToken: token,
-    dashboardOrigin: process.env.LATTICE_DASHBOARD_ORIGIN || '*',
+    host: process.env.LATTICE_HOST || '127.0.0.1',
+    dashboardOrigin: process.env.LATTICE_DASHBOARD_ORIGIN || 'http://localhost:3377',
   };
 
   fastify.decorate('config', config);

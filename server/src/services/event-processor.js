@@ -1,5 +1,3 @@
-import { normalizeRemoteUrl } from './project-resolver.js';
-
 /**
  * Process a single event inside a transaction.
  * Handles project upsert, session management, and event-type-specific side effects.
@@ -7,9 +5,14 @@ import { normalizeRemoteUrl } from './project-resolver.js';
 export function createEventProcessor(queries) {
   return function processEvent(event) {
     const projectId = event.project_id;
-    const payload = typeof event.payload === 'string'
-      ? JSON.parse(event.payload || '{}')
-      : (event.payload || {});
+    let payload;
+    try {
+      payload = typeof event.payload === 'string'
+        ? JSON.parse(event.payload || '{}')
+        : (event.payload || {});
+    } catch {
+      payload = {};
+    }
 
     // 1. Upsert project (always update last_activity_at)
     if (projectId) {
@@ -63,6 +66,8 @@ export function createEventProcessor(queries) {
       case 'session.waiting':
         if (event.session_id) {
           queries.updateSessionStatus(event.session_id, 'waiting_for_input');
+          // Keep last_heartbeat_at fresh so stale cleanup doesn't kill waiting sessions
+          queries.updateSessionHeartbeat(event.session_id, event.timestamp);
         }
         break;
 
@@ -76,7 +81,7 @@ export function createEventProcessor(queries) {
             in_progress: payload.in_progress,
             blocked_on: payload.blocked_on,
             next_steps: payload.next_steps,
-            trigger_type: payload.trigger || payload.trigger_type,
+            trigger_type: payload.trigger_type || payload.trigger,
             branch: payload.branch,
             last_commit: payload.last_commit,
           });

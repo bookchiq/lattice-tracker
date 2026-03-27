@@ -56,19 +56,7 @@ export function authHeader() {
 
 export async function closeApp(app) {
   await app.close();
-  try {
-    unlinkSync(app._testDbPath);
-  } catch {
-    // ignore if already deleted
-  }
-  try {
-    unlinkSync(app._testDbPath + '-wal');
-  } catch {
-    // ignore
-  }
-  try {
-    unlinkSync(app._testDbPath + '-shm');
-  } catch {
-    // ignore
+  for (const suffix of ['', '-wal', '-shm']) {
+    try { unlinkSync(app._testDbPath + suffix); } catch { /* ignore */ }
   }
 }

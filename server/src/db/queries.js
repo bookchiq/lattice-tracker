@@ -9,7 +9,7 @@ const VALID_TRANSITIONS = {
 export function createQueries(db) {
   // -- Events --
   const _insertEvent = db.prepare(`
-    INSERT INTO events (client_event_id, session_id, project_id, event_type, timestamp, hostname, payload)
+    INSERT OR IGNORE INTO events (client_event_id, session_id, project_id, event_type, timestamp, hostname, payload)
     VALUES (@client_event_id, @session_id, @project_id, @event_type, @timestamp, @hostname, @payload)
   `);
 
@@ -45,12 +45,31 @@ export function createQueries(db) {
 
   const _getProjects = db.prepare(`SELECT * FROM projects ORDER BY last_activity_at DESC`);
   const _getProjectsByTag = db.prepare(`SELECT * FROM projects WHERE client_tag = ? ORDER BY last_activity_at DESC`);
+  const _getActiveProjects = db.prepare(`
+    SELECT DISTINCT p.* FROM projects p
+    INNER JOIN sessions s ON s.project_id = p.id
+    WHERE s.status IN ('active', 'waiting_for_input')
+    ORDER BY p.last_activity_at DESC
+  `);
+  const _getIdleProjects = db.prepare(`
+    SELECT p.* FROM projects p
+    WHERE NOT EXISTS (
+      SELECT 1 FROM sessions s WHERE s.project_id = p.id AND s.status IN ('active', 'waiting_for_input')
+    )
+    ORDER BY p.last_activity_at DESC
+  `);
   const _getProjectById = db.prepare(`SELECT * FROM projects WHERE id = ?`);
   const _updateProject = db.prepare(`
     UPDATE projects SET display_name = @display_name, client_tag = @client_tag WHERE id = @id
   `);
 
   function getProjects(filters = {}) {
+    if (filters.status === 'active') {
+      return _getActiveProjects.all();
+    }
+    if (filters.status === 'idle') {
+      return _getIdleProjects.all();
+    }
     if (filters.client_tag) {
       return _getProjectsByTag.all(filters.client_tag);
     }
@@ -113,7 +132,16 @@ export function createQueries(db) {
   function updateSessionHeartbeat(id, lastHeartbeatAt, status = null) {
     const current = _getSessionStatus.get(id);
     if (!current) return null;
-    const newStatus = status || current.status;
+
+    let newStatus = current.status;
+    if (status && status !== current.status) {
+      const allowed = VALID_TRANSITIONS[current.status];
+      if (allowed && allowed.includes(status)) {
+        newStatus = status;
+      }
+      // If transition is invalid (e.g., completed→active), keep current status
+    }
+
     return _updateSessionHeartbeat.run({ id, last_heartbeat_at: lastHeartbeatAt, status: newStatus });
   }
 
