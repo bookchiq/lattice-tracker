@@ -464,6 +464,86 @@ function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => map[c]);
 }
 
+// --- Theme ---
+
+const THEME_KEY = 'lattice_theme';
+
+// SVG icons for each theme state
+const THEME_ICONS = {
+  light: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+  dark: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+  auto: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/><line x1="12" y1="8" x2="12" y2="12" stroke-dasharray="2 2"/>',
+};
+
+const THEME_TITLES = {
+  auto: 'Theme: System',
+  light: 'Theme: Light',
+  dark: 'Theme: Dark',
+};
+
+function getStoredTheme() {
+  try {
+    const val = localStorage.getItem(THEME_KEY);
+    if (val === 'light' || val === 'dark') return val;
+  } catch (_) { /* private browsing */ }
+  return 'auto';
+}
+
+function setStoredTheme(value) {
+  try {
+    if (value === 'auto') {
+      localStorage.removeItem(THEME_KEY);
+    } else {
+      localStorage.setItem(THEME_KEY, value);
+    }
+  } catch (_) { /* private browsing */ }
+}
+
+function resolveTheme(preference) {
+  if (preference === 'light') return 'light';
+  if (preference === 'dark') return 'dark';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyTheme(resolved) {
+  document.documentElement.classList.toggle('theme-dark', resolved === 'dark');
+}
+
+function updateToggleButtons(preference) {
+  const icon = THEME_ICONS[preference];
+  const title = THEME_TITLES[preference];
+  for (const btn of document.querySelectorAll('.theme-toggle')) {
+    btn.querySelector('svg').innerHTML = icon;
+    btn.title = title;
+    btn.setAttribute('aria-label', title);
+  }
+}
+
+function cycleTheme() {
+  const current = getStoredTheme();
+  const next = current === 'auto' ? 'light' : current === 'light' ? 'dark' : 'auto';
+  setStoredTheme(next);
+  applyTheme(resolveTheme(next));
+  updateToggleButtons(next);
+}
+
+// Listen for OS theme changes (only affects auto mode)
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (getStoredTheme() === 'auto') {
+    applyTheme(resolveTheme('auto'));
+  }
+});
+
+// Init theme toggle buttons
+function initTheme() {
+  const pref = getStoredTheme();
+  applyTheme(resolveTheme(pref));
+  updateToggleButtons(pref);
+
+  document.getElementById('auth-theme-toggle').addEventListener('click', cycleTheme);
+  document.getElementById('app-theme-toggle').addEventListener('click', cycleTheme);
+}
+
 // --- Init ---
 
 document.getElementById('auth-form').addEventListener('submit', (e) => {
@@ -508,4 +588,5 @@ window.addEventListener('online', () => {
 setInterval(updateTimeElements, 30000);
 
 // Boot
+initTheme();
 initAuth();

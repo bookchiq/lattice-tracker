@@ -3,15 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="dark light">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';">
+  <!-- CSP: sha256 hash covers the inline theme-init script below -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'sha256-wRP+cw0c87nYUgWJFgfT6Gj93S0e8l3rvheikMXnqrs=';">
   <title>Lattice</title>
   <link rel="stylesheet" href="/style.css">
+  <!-- Theme-init: reads localStorage before first paint to prevent FOUC -->
+  <script>(function(){var t=localStorage.getItem("lattice_theme");var d=t==="dark"||(!t&&matchMedia("(prefers-color-scheme:dark)").matches);if(d)document.documentElement.classList.add("theme-dark")})();</script>
 </head>
 <body>
 
   <!-- Auth screen -->
   <div id="auth-screen" class="auth-screen" hidden>
+    <button class="theme-toggle auth-theme-toggle" id="auth-theme-toggle" type="button" title="Toggle theme">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/>
+        <line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/>
+        <line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    </button>
     <form class="auth-form" id="auth-form">
       <h1>Lattice</h1>
       <p>Enter your API token to access the dashboard.</p>
@@ -28,6 +43,19 @@
       <span class="topbar-brand">Lattice</span>
       <div class="topbar-actions">
         <span class="last-updated" id="last-updated"></span>
+        <button class="theme-toggle" id="app-theme-toggle" type="button" title="Toggle theme">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+        </button>
         <button class="btn-logout" id="btn-logout">Logout</button>
       </div>
     </header>
