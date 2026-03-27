@@ -20,7 +20,7 @@ function initAuth() {
   // Check URL hash for token (#token=...)
   const hash = window.location.hash;
   if (hash.startsWith('#token=')) {
-    const token = hash.slice(7);
+    const token = decodeURIComponent(hash.slice(7));
     if (token) setToken(token);
     history.replaceState(null, '', window.location.pathname);
   }
@@ -40,7 +40,12 @@ function showAuthScreen() {
 function showApp() {
   document.getElementById('auth-screen').hidden = true;
   document.getElementById('app').hidden = false;
-  loadProjects();
+  loadProjects().catch(err => {
+    console.error('Failed to load projects:', err.message);
+    // Don't bounce to login on load failure — the token might be valid
+    // but the API might be temporarily unreachable
+    document.getElementById('error-banner').classList.add('visible');
+  });
 }
 
 // --- API ---
@@ -59,11 +64,11 @@ async function apiFetch(path) {
   if (res.status === 401) {
     clearToken();
     showAuthScreen();
-    throw new Error('Session expired');
+    throw new Error('Invalid token');
   }
 
   if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`);
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
   }
 
   return res.json();
