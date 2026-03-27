@@ -480,7 +480,7 @@ Install script, uninstall script, VPS deployment config, Claude Code plugin/skil
 
 **Tasks:**
 
-- [ ] Create `install-hooks.sh`
+- [x] Create `install-hooks.sh`
   - Check prerequisites: `jq`, `curl`, `git`, `node` (v20+)
   - Prompt for API URL (**validate starts with `https://`**), API token, device label
   - Write `~/.config/lattice/config.json` with `chmod 0600`
@@ -504,37 +504,37 @@ Install script, uninstall script, VPS deployment config, Claude Code plugin/skil
 
 > The `settings.json` merge is the highest-risk client-side operation. Failure modes: (1) file isn't valid JSON → back up and abort, (2) file doesn't exist → create scaffold, (3) existing hooks for same events → array concatenation preserves them, (4) `jq '...' file > file` truncates → always write to temp then `mv`. The launchd PATH issue is the #1 cause of "works in terminal, fails from cron" on macOS — plist agents get only `/usr/bin:/bin:/usr/sbin:/sbin` by default.
 
-- [ ] Create `uninstall-hooks.sh`
+- [x] Create `uninstall-hooks.sh`
   - Remove hook scripts from `~/.claude/hooks/lattice/`
   - Remove Lattice entries from `~/.claude/settings.json` (match any path containing `lattice` — handles modified paths)
   - Unload and remove launchd plist using `launchctl bootout gui/$(id -u)/com.lattice.heartbeat`
   - Optionally remove `~/.config/lattice/` (prompt user)
 
-- [ ] Create root `package.json` with scripts pointing to `server/`
+- [x] Create root `package.json` with scripts pointing to `server/`
 
-- [ ] Create `README.md` — consolidated docs (project description, architecture diagram, quick start for VPS + per-machine, configuration reference, API reference, event types). Single file — no separate `docs/api.md` or `docs/event-schema.md` for a single-user tool.
+- [x] Create `README.md` — consolidated docs (project description, architecture diagram, quick start for VPS + per-machine, configuration reference, API reference, event types). Single file — no separate `docs/api.md` or `docs/event-schema.md` for a single-user tool.
 
-- [ ] Create `LICENSE` — MIT
+- [x] Create `LICENSE` — MIT
 
-- [ ] Create root `.gitignore` — `node_modules/`, `*.db`, `*.db-wal`, `*.db-shm`, `.env`, `.DS_Store`, `.lattice/`
+- [x] Create root `.gitignore` — `node_modules/`, `*.db`, `*.db-wal`, `*.db-shm`, `.env`, `.DS_Store`, `.lattice/`
 
-- [ ] Create `.claude-plugin/plugin.json` — plugin manifest with name `lattice`
+- [x] Create `.claude-plugin/plugin.json` — plugin manifest with name `lattice`
 
-- [ ] Create `skills/checkpoint/SKILL.md` — checkpoint summary skill
+- [x] Create `skills/checkpoint/SKILL.md` — checkpoint summary skill
   - Must read `~/.config/lattice/config.env` for API URL and token (Claude Code's Bash env doesn't inherit hook env vars)
   - Write to `.lattice/last-checkpoint.json` AND POST to API via curl (the curl IS the delivery mechanism)
   - All paths use `.lattice/` (not `.lattice-tracker/`)
 
-- [ ] Create `commands/status.md` — `/lattice:status` slash command
-- [ ] Create `commands/where.md` — `/lattice:where` slash command
-- [ ] Create `commands/project.md` — `/lattice:project <name>` slash command (single-project detail + latest checkpoint)
-- [ ] Create `commands/tag.md` — `/lattice:tag <project> <client_tag>` slash command (PATCH project metadata)
+- [x] Create `commands/status.md` — `/lattice:status` slash command
+- [x] Create `commands/where.md` — `/lattice:where` slash command
+- [x] Create `commands/project.md` — `/lattice:project <name>` slash command (single-project detail + latest checkpoint)
+- [x] Create `commands/tag.md` — `/lattice:tag <project> <client_tag>` slash command (PATCH project metadata)
 
 ### Research Insights: Agent-Native Slash Commands
 
 > The original plan had only 2 query commands (`/lattice:status`, `/lattice:where`) + 1 action command (`/lattice:checkpoint`). The dashboard has 3 views with filtering, editing, and deep-dive. Adding `/lattice:project` (detail view equivalent) and `/lattice:tag` (edit equivalent) closes the parity gap so agents can do everything dashboard users can. These are curl compositions, not new API endpoints.
 
-- [ ] Create VPS deployment docs (section in README)
+- [x] Create VPS deployment docs (section in README)
   - **Use pm2** (not systemd) — simpler for iterative v1 development
   - pm2 ecosystem file: `instances: 1` (**NEVER cluster — SQLite is single-writer**)
   - **Require Nginx reverse proxy** on port 443 forwarding to `127.0.0.1:3377` — Fastify must NOT be internet-facing
@@ -544,13 +544,13 @@ Install script, uninstall script, VPS deployment config, Claude Code plugin/skil
   - Stale session cleanup runs automatically on server startup (in db.js plugin)
 
 **Acceptance criteria:**
-- [ ] `install-hooks.sh` completes on a fresh macOS machine with Homebrew
-- [ ] `config.env` is generated alongside `config.json`
-- [ ] `settings.json` backup is created before modification
+- [x] `install-hooks.sh` completes on a fresh macOS machine with Homebrew
+- [x] `config.env` is generated alongside `config.json`
+- [x] `settings.json` backup is created before modification
 - [ ] After install, Claude Code hooks fire and events reach the API
-- [ ] `uninstall-hooks.sh` cleanly removes all Lattice components
-- [ ] Heartbeat plist loads and runs every 3 minutes (verify with `launchctl list`)
-- [ ] All 5 slash commands work (`/lattice:checkpoint`, `/lattice:status`, `/lattice:where`, `/lattice:project`, `/lattice:tag`)
+- [x] `uninstall-hooks.sh` cleanly removes all Lattice components
+- [x] Heartbeat plist loads and runs every 3 minutes (verify with `launchctl list`)
+- [x] All 5 slash commands work (`/lattice:checkpoint`, `/lattice:status`, `/lattice:where`, `/lattice:project`, `/lattice:tag`)
 - [ ] Nginx proxies HTTPS → Fastify correctly
 - [ ] SQLite backup cron runs and produces restorable `.db` files
 
