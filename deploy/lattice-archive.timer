@@ -1,0 +1,9 @@
+[Unit]
+Description=Lattice Tracker hourly git archive export
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

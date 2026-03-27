@@ -706,6 +706,50 @@ body {
 .uncommitted-warning { color: var(--color-warning); }
 .session-id-label { margin-left: 8px; font-size: var(--text-sm); color: var(--color-text-muted); }
 
+/* --- Copy context button --- */
+
+.btn-copy-context {
+  display: block;
+  margin-top: var(--space-md);
+  background: none;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  min-height: 36px;
+}
+
+.btn-copy-context:hover {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+/* --- Device filter --- */
+
+.tab-nav-spacer { flex: 1; }
+
+.device-filter {
+  flex: 0 0 auto;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.device-filter:hover {
+  border-color: var(--color-accent);
+}
+
 /* --- Updated timestamp --- */
 
 .last-updated {
