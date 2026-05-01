@@ -1,0 +1,27 @@
+[Unit]
+Description=Lattice Tracker API Server
+After=network.target
+
+[Service]
+Type=simple
+User=lattice
+Group=lattice
+WorkingDirectory=/opt/lattice-tracker/server
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=LATTICE_PORT=3377
+Environment=LATTICE_HOST=127.0.0.1
+Environment=LATTICE_DB_PATH=/var/lib/lattice-tracker/lattice.db
+EnvironmentFile=-/etc/lattice-tracker/env
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/lattice-tracker
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

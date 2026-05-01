@@ -5,10 +5,10 @@ export default async function projectRoutes(fastify) {
 
   // GET /api/projects
   fastify.get('/projects', async (request) => {
-    const { client_tag, status, include } = request.query;
+    const { client_tag, status, include, q } = request.query;
     const limit = clampInt(request.query.limit, 50, 200);
     const offset = clampOffset(request.query.offset);
-    const projects = queries.getProjects({ client_tag, status, limit, offset });
+    const projects = queries.getProjects({ client_tag, status, q, limit, offset });
 
     let data = projects;
     if (include === 'latest') {

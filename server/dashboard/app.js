@@ -151,6 +151,8 @@ function createPoller(fetchFn, { interval = 15000, maxInterval = 60000, maxError
 let currentView = 'projects';
 let projectsPoller = null;
 let sessionsPoller = null;
+let deviceFilter = '';
+let knownDevices = new Set();
 
 function showView(name) {
   // Stop pollers
@@ -216,7 +218,25 @@ function renderProjectList(projects) {
   const empty = document.getElementById('projects-empty');
   const tpl = document.getElementById('tpl-project-card');
 
-  if (!projects.length) {
+  // Track known devices for the filter dropdown
+  for (const p of projects) {
+    const session = p.latest_session;
+    if (session) {
+      const device = session.device_label || session.hostname;
+      if (device) knownDevices.add(device);
+    }
+  }
+  updateDeviceDropdown();
+
+  // Apply device filter
+  const filtered = deviceFilter
+    ? projects.filter(p => {
+        const s = p.latest_session;
+        return s && (s.device_label === deviceFilter || s.hostname === deviceFilter);
+      })
+    : projects;
+
+  if (!filtered.length) {
     container.innerHTML = '';
     empty.hidden = false;
     return;
@@ -232,7 +252,7 @@ function renderProjectList(projects) {
   const fragment = document.createDocumentFragment();
   const newIds = new Set();
 
-  for (const project of projects) {
+  for (const project of filtered) {
     newIds.add(project.id);
     let el = existingMap.get(project.id);
 
@@ -298,7 +318,19 @@ function renderSessionList(sessions) {
   const empty = document.getElementById('sessions-empty');
   const tpl = document.getElementById('tpl-session-card');
 
-  if (!sessions.length) {
+  // Track known devices
+  for (const s of sessions) {
+    const device = s.device_label || s.hostname;
+    if (device) knownDevices.add(device);
+  }
+  updateDeviceDropdown();
+
+  // Apply device filter
+  const filtered = deviceFilter
+    ? sessions.filter(s => s.device_label === deviceFilter || s.hostname === deviceFilter)
+    : sessions;
+
+  if (!filtered.length) {
     container.innerHTML = '';
     empty.hidden = false;
     return;
@@ -314,7 +346,7 @@ function renderSessionList(sessions) {
   const fragment = document.createDocumentFragment();
   const newIds = new Set();
 
-  for (const session of sessions) {
+  for (const session of filtered) {
     newIds.add(session.id);
     let el = existingMap.get(session.id);
 
@@ -410,6 +442,17 @@ function renderProjectDetail(project, sessions) {
 
   // Checkpoint
   if (checkpoint) {
+    const contextBlock = [
+      `Project: ${name}`,
+      `Branch: ${checkpoint.branch || 'unknown'}`,
+      `Last Commit: ${checkpoint.last_commit || 'unknown'}`,
+      '',
+      `Summary: ${checkpoint.summary || 'None'}`,
+      `In Progress: ${checkpoint.in_progress || 'None'}`,
+      checkpoint.blocked_on ? `Blocked On: ${checkpoint.blocked_on}` : '',
+      `Next Steps: ${checkpoint.next_steps || 'None'}`,
+    ].filter(Boolean).join('\n');
+
     html += `
       <div class="detail-section">
         <h3>Latest Checkpoint</h3>
@@ -421,9 +464,13 @@ function renderProjectDetail(project, sessions) {
             <dt>Branch</dt><dd>${escapeHtml(checkpoint.branch || 'unknown')}</dd>
             <dt>Last Commit</dt><dd>${escapeHtml(checkpoint.last_commit || 'unknown')}</dd>
           </dl>
+          <button class="btn-copy-context" id="btn-copy-context" title="Copy context for a new Claude Code session">Continue in Claude Code</button>
         </div>
       </div>
     `;
+
+    // Store for copy handler after innerHTML assignment
+    detail._contextBlock = contextBlock;
   }
 
   // Sessions
@@ -454,6 +501,36 @@ function renderProjectDetail(project, sessions) {
   detail.innerHTML = html;
 
   document.getElementById('btn-back').addEventListener('click', () => showView('projects'));
+
+  const copyBtn = document.getElementById('btn-copy-context');
+  if (copyBtn && detail._contextBlock) {
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(detail._contextBlock).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Continue in Claude Code'; }, 2000);
+      });
+    });
+  }
+}
+
+// --- Device filter ---
+
+function updateDeviceDropdown() {
+  const select = document.getElementById('device-filter');
+  const devices = [...knownDevices].sort();
+  const current = select.value;
+
+  // Only rebuild if devices changed
+  if (select.options.length - 1 === devices.length) return;
+
+  select.innerHTML = '<option value="">All devices</option>';
+  for (const d of devices) {
+    const opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = d;
+    select.appendChild(opt);
+  }
+  select.value = current;
 }
 
 // --- Utilities ---
@@ -563,6 +640,16 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 document.getElementById('tab-nav').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-view]');
   if (btn) showView(btn.dataset.view);
+});
+
+document.getElementById('device-filter').addEventListener('change', (e) => {
+  deviceFilter = e.target.value;
+  // Re-trigger current view to apply filter
+  if (currentView === 'projects' && projectsPoller) {
+    loadProjects().catch(() => {});
+  } else if (currentView === 'active' && sessionsPoller) {
+    loadActiveSessions().catch(() => {});
+  }
 });
 
 // Pause polling when tab is hidden

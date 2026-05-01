@@ -78,10 +78,19 @@ export function createQueries(db) {
     UPDATE projects SET display_name = @display_name, client_tag = @client_tag WHERE id = @id
   `);
 
+  const _searchProjects = db.prepare(`
+    SELECT * FROM projects
+    WHERE canonical_name LIKE @q OR display_name LIKE @q OR id LIKE @q
+    ORDER BY last_activity_at DESC LIMIT @limit OFFSET @offset
+  `);
+
   function getProjects(filters = {}) {
     const limit = filters.limit || 50;
     const offset = filters.offset || 0;
 
+    if (filters.q) {
+      return _searchProjects.all({ q: `%${filters.q}%`, limit, offset });
+    }
     if (filters.status === 'active') {
       return _getActiveProjects.all({ limit, offset });
     }
@@ -248,6 +257,32 @@ export function createQueries(db) {
     return _getLatestSnapshot.get(projectId);
   }
 
+  const _getSnapshots = db.prepare(`
+    SELECT * FROM git_snapshots ORDER BY timestamp DESC LIMIT @limit OFFSET @offset
+  `);
+  const _getSnapshotsByTrigger = db.prepare(`
+    SELECT * FROM git_snapshots WHERE trigger_type = @trigger ORDER BY timestamp DESC LIMIT @limit OFFSET @offset
+  `);
+  const _getSnapshotsByProjectAndTrigger = db.prepare(`
+    SELECT * FROM git_snapshots WHERE project_id = @project_id AND trigger_type = @trigger ORDER BY timestamp DESC LIMIT @limit OFFSET @offset
+  `);
+
+  function getSnapshots(filters = {}) {
+    const limit = filters.limit || 50;
+    const offset = filters.offset || 0;
+
+    if (filters.project_id && filters.trigger) {
+      return _getSnapshotsByProjectAndTrigger.all({ project_id: filters.project_id, trigger: filters.trigger, limit, offset });
+    }
+    if (filters.project_id) {
+      return _getSnapshotsByProjectId.all(filters.project_id, { limit, offset });
+    }
+    if (filters.trigger) {
+      return _getSnapshotsByTrigger.all({ trigger: filters.trigger, limit, offset });
+    }
+    return _getSnapshots.all({ limit, offset });
+  }
+
   // -- Checkpoints --
   const _insertCheckpoint = db.prepare(`
     INSERT INTO checkpoints (session_id, project_id, timestamp, summary, in_progress, blocked_on, next_steps, trigger_type, branch, last_commit)
@@ -301,6 +336,7 @@ export function createQueries(db) {
     getSnapshotsByProjectId,
     getSnapshotsBySessionId,
     getLatestSnapshot,
+    getSnapshots,
     insertCheckpoint,
     getLatestCheckpoint,
     getCheckpointsByProjectId,
