@@ -3,6 +3,8 @@
 // --- Auth ---
 
 const TOKEN_KEY = 'lattice_token';
+let authDisabled = false;
+let authReady;
 
 function getToken() {
   return sessionStorage.getItem(TOKEN_KEY);
@@ -16,7 +18,21 @@ function clearToken() {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
-function initAuth() {
+async function initAuth() {
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) {
+      const cfg = await res.json();
+      authDisabled = cfg.authDisabled === true;
+    }
+  } catch { /* keep default: authDisabled=false (fail-closed) */ }
+
+  if (authDisabled) {
+    document.getElementById('btn-logout').hidden = true;
+    showApp();
+    return;
+  }
+
   // Check URL hash for token (#token=...)
   const hash = window.location.hash;
   if (hash.startsWith('#token=')) {
@@ -51,17 +67,20 @@ function showApp() {
 // --- API ---
 
 async function apiFetch(path) {
-  const token = getToken();
-  if (!token) {
-    showAuthScreen();
-    throw new Error('Not authenticated');
+  await authReady;
+  const headers = {};
+  if (!authDisabled) {
+    const token = getToken();
+    if (!token) {
+      showAuthScreen();
+      throw new Error('Not authenticated');
+    }
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`/api${path}`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
+  const res = await fetch(`/api${path}`, { headers });
 
-  if (res.status === 401) {
+  if (res.status === 401 && !authDisabled) {
     clearToken();
     showAuthScreen();
     throw new Error('Invalid token');
@@ -676,4 +695,4 @@ setInterval(updateTimeElements, 30000);
 
 // Boot
 initTheme();
-initAuth();
+authReady = initAuth();

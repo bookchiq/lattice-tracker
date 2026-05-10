@@ -12,20 +12,23 @@ import projectRoutes from './routes/projects.js';
 import sessionRoutes from './routes/sessions.js';
 import snapshotRoutes from './routes/snapshots.js';
 import healthRoutes from './routes/health.js';
+import configRoutes from './routes/config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Build a configured Fastify application without starting it.
  *
- * @param {object} [opts]
- * @param {boolean} [opts.logger=true]          - Fastify logger setting
- * @param {string}  [opts.dbPath]               - Override database path
- * @param {string}  [opts.apiToken]             - Override API token
- * @param {string}  [opts.host]                 - Override listen host
- * @param {number}  [opts.port]                 - Override listen port
- * @param {string}  [opts.dashboardOrigin]      - Override dashboard origin for CORS
- * @param {number}  [opts.rateLimitMax=100]     - Rate-limit max requests per window
+ * @param {object}   [opts]
+ * @param {boolean}  [opts.logger=true]          - Fastify logger setting
+ * @param {string}   [opts.dbPath]               - Override database path
+ * @param {string}   [opts.apiToken]             - Override API token
+ * @param {string}   [opts.host]                 - Override listen host
+ * @param {number}   [opts.port]                 - Override listen port
+ * @param {string}   [opts.dashboardOrigin]      - Override dashboard origin for CORS
+ * @param {boolean}  [opts.authDisabled]         - Disable bearer-token auth (trusted-network mode)
+ * @param {string[]} [opts.trustedCidrs]         - CIDR ranges allowed when authDisabled is true
+ * @param {number}   [opts.rateLimitMax=100]     - Rate-limit max requests per window
  * @returns {Promise<import('fastify').FastifyInstance>}
  */
 export async function buildApp(opts = {}) {
@@ -36,6 +39,8 @@ export async function buildApp(opts = {}) {
     host,
     port,
     dashboardOrigin,
+    authDisabled,
+    trustedCidrs,
     rateLimitMax = 100,
   } = opts;
 
@@ -48,8 +53,19 @@ export async function buildApp(opts = {}) {
   if (host !== undefined) configOverrides.host = host;
   if (port !== undefined) configOverrides.port = port;
   if (dashboardOrigin !== undefined) configOverrides.dashboardOrigin = dashboardOrigin;
+  if (authDisabled !== undefined) configOverrides.authDisabled = authDisabled;
+  if (trustedCidrs !== undefined) configOverrides.trustedCidrs = trustedCidrs;
 
   await app.register(configPlugin, { configOverrides });
+
+  if (app.config.authDisabled) {
+    app.log.warn(
+      `⚠ LATTICE_AUTH_DISABLED=true — API requires no token. ` +
+      `Trusted CIDRs: ${app.config.trustedCidrs.join(', ')}. ` +
+      `Requests from outside these ranges will be rejected. ` +
+      `DO NOT enable on a publicly-accessible host.`
+    );
+  }
 
   await app.register(cors, {
     origin: app.config.dashboardOrigin,
@@ -57,7 +73,6 @@ export async function buildApp(opts = {}) {
   });
 
   await app.register(dbPlugin);
-  await app.register(authPlugin);
 
   // Security headers
   app.addHook('onSend', async (request, reply) => {
@@ -76,14 +91,27 @@ export async function buildApp(opts = {}) {
     maxAge: 3600000,
   });
 
-  // API routes — rate limiter scoped to /api/ only
-  await app.register(async function apiRoutes(api) {
+  // Public API routes — rate-limited but not auth-protected.
+  // Health/config must remain reachable so the dashboard can discover server
+  // state before it has (or doesn't have) a token.
+  await app.register(async function publicApi(api) {
     await api.register(rateLimit, {
       max: rateLimitMax,
       timeWindow: '1 minute',
     });
 
     await api.register(healthRoutes);
+    await api.register(configRoutes);
+  }, { prefix: '/api' });
+
+  // Protected API routes — rate-limited AND auth-protected.
+  await app.register(async function protectedApi(api) {
+    await api.register(rateLimit, {
+      max: rateLimitMax,
+      timeWindow: '1 minute',
+    });
+    await api.register(authPlugin);
+
     await api.register(eventRoutes);
     await api.register(projectRoutes);
     await api.register(sessionRoutes);

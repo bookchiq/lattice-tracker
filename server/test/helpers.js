@@ -9,18 +9,20 @@ const TEST_TOKEN = 'test-token-for-lattice';
 
 let dbCounter = 0;
 
-export async function buildTestApp() {
+export async function buildTestApp(opts = {}) {
   dbCounter++;
   const dbPath = path.join(__dirname, `test-${process.pid}-${dbCounter}.db`);
 
   const app = await buildApp({
     logger: false,
     dbPath,
-    apiToken: TEST_TOKEN,
+    apiToken: 'apiToken' in opts ? opts.apiToken : TEST_TOKEN,
     host: '127.0.0.1',
     port: 0,
     dashboardOrigin: 'http://localhost:3377',
     rateLimitMax: 1000,
+    authDisabled: opts.authDisabled,
+    trustedCidrs: opts.trustedCidrs,
   });
 
   app._testDbPath = dbPath;

@@ -9,15 +9,20 @@ Show all tracked projects with their current status.
 source ~/.config/lattice/config.env
 ```
 
-2. Fetch all projects:
+2. Build the auth args (omit the header when no token is set, mirroring `hooks/scripts/lib/common.sh`):
 ```bash
-curl -s -H "Authorization: Bearer ${LATTICE_API_TOKEN}" "${LATTICE_API_URL}/api/projects"
+[ -n "$LATTICE_API_TOKEN" ] && AUTH_ARGS=(-H "Authorization: Bearer $LATTICE_API_TOKEN") || AUTH_ARGS=()
 ```
 
-3. Display the results in a readable table format showing:
+3. Fetch all projects:
+```bash
+curl -s "${AUTH_ARGS[@]}" "${LATTICE_API_URL}/api/projects"
+```
+
+4. Display the results in a readable table format showing:
    - Project name (display_name or canonical_name)
    - Client tag (if set)
    - Last activity (relative time)
    - Status (active/idle based on whether active sessions exist)
 
-4. For projects with active sessions, also show the device and branch.
+5. For projects with active sessions, also show the device and branch.

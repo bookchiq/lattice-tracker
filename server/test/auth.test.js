@@ -41,8 +41,55 @@ describe('Auth', () => {
     assert.equal(res.statusCode, 200);
   });
 
+  it('exposes /api/config without auth', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/config' });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.json().authDisabled, false);
+  });
+
   it('allows dashboard without auth', async () => {
     const res = await app.inject({ method: 'GET', url: '/' });
     assert.equal(res.statusCode, 200);
   });
 });
+
+describe('Auth disabled (trusted-network mode)', () => {
+  let app;
+
+  before(async () => {
+    // localhost (127.0.0.1) is in the default trusted CIDRs, so injected requests
+    // — which arrive from 127.0.0.1 — should be allowed without a token
+    app = await buildApp({ authDisabled: true, apiToken: null });
+  });
+
+  after(async () => {
+    await closeApp(app);
+  });
+
+  it('reports authDisabled:true via /api/config', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/config' });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.json().authDisabled, true);
+  });
+
+  it('allows API request with no token from trusted IP', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/projects' });
+    assert.equal(res.statusCode, 200);
+  });
+
+  it('rejects API request from untrusted IP (X-Forwarded-For not honored by default)', async () => {
+    // Use a tight CIDR list that excludes 127.* to simulate an "untrusted" caller
+    const tightApp = await buildApp({
+      authDisabled: true,
+      apiToken: null,
+      trustedCidrs: ['10.0.0.0/8'],
+    });
+    try {
+      const res = await tightApp.inject({ method: 'GET', url: '/api/projects' });
+      assert.equal(res.statusCode, 401);
+    } finally {
+      await closeApp(tightApp);
+    }
+  });
+});
+

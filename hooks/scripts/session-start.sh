@@ -99,12 +99,12 @@ lattice_emit_batch "$BATCH_JSON"
 # --- Checkpoint injection (best-effort) ---
 CHECKPOINT_JSON=""
 
-# Try to fetch latest checkpoint from API (token via header file)
+# Try to fetch latest checkpoint from API
 ENCODED_PROJECT_ID="$(lattice_urlencode "$LATTICE_PROJECT_ID")"
 CHECKPOINT_RESPONSE="$(curl -s \
   --max-time 1 \
   --connect-timeout 0.5 \
-  -H @"$LATTICE_AUTH_HEADER_FILE" \
+  "${LATTICE_CURL_AUTH_ARGS[@]}" \
   "${LATTICE_API_URL}/api/projects/${ENCODED_PROJECT_ID}/checkpoints?limit=1" 2>/dev/null)" || true
 
 if [ -n "$CHECKPOINT_RESPONSE" ]; then

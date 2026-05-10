@@ -13,24 +13,29 @@ Show detailed information about a specific project, including git state, latest 
 source ~/.config/lattice/config.env
 ```
 
-2. Fetch all projects to find the matching one:
+2. Build the auth args (omit the header when no token is set, mirroring `hooks/scripts/lib/common.sh`):
 ```bash
-curl -s -H "Authorization: Bearer ${LATTICE_API_TOKEN}" "${LATTICE_API_URL}/api/projects"
+[ -n "$LATTICE_API_TOKEN" ] && AUTH_ARGS=(-H "Authorization: Bearer $LATTICE_API_TOKEN") || AUTH_ARGS=()
 ```
 
-3. Find the project matching the `<name>` argument (case-insensitive partial match on display_name, canonical_name, or id).
-
-4. Fetch the project detail:
+3. Fetch all projects to find the matching one:
 ```bash
-curl -s -H "Authorization: Bearer ${LATTICE_API_TOKEN}" "${LATTICE_API_URL}/api/projects/<project_id>"
+curl -s "${AUTH_ARGS[@]}" "${LATTICE_API_URL}/api/projects"
 ```
 
-5. Fetch recent sessions:
+4. Find the project matching the `<name>` argument (case-insensitive partial match on display_name, canonical_name, or id).
+
+5. Fetch the project detail:
 ```bash
-curl -s -H "Authorization: Bearer ${LATTICE_API_TOKEN}" "${LATTICE_API_URL}/api/projects/<project_id>/sessions?limit=5"
+curl -s "${AUTH_ARGS[@]}" "${LATTICE_API_URL}/api/projects/<project_id>"
 ```
 
-6. Display:
+6. Fetch recent sessions:
+```bash
+curl -s "${AUTH_ARGS[@]}" "${LATTICE_API_URL}/api/projects/<project_id>/sessions?limit=5"
+```
+
+7. Display:
    - Project name, ID, client tag
    - Git state: branch, last commit, uncommitted changes
    - Latest checkpoint: summary, in progress, next steps

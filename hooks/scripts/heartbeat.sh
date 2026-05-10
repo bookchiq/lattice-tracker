@@ -111,7 +111,7 @@ if [ -f "$FAILED_LOG" ] && [ -s "$FAILED_LOG" ]; then
         --max-time 3 \
         --connect-timeout 2 \
         -X POST \
-        -H @"$LATTICE_AUTH_HEADER_FILE" \
+        "${LATTICE_CURL_AUTH_ARGS[@]}" \
         -H "Content-Type: application/json" \
         -d "$line" \
         "${LATTICE_API_URL}/api/events" 2>/dev/null)

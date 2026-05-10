@@ -108,7 +108,7 @@ Data flows one direction: hooks → API → SQLite. The dashboard reads via the 
 
 ```bash
 LATTICE_API_URL="https://lattice.yourdomain.com"
-LATTICE_API_TOKEN="your-token-here"
+LATTICE_API_TOKEN="your-token-here"   # leave blank if server runs with auth disabled
 LATTICE_DEVICE_LABEL="laptop"
 ```
 
@@ -121,9 +121,24 @@ LATTICE_DB_PATH=./lattice.db
 LATTICE_DASHBOARD_ORIGIN=https://lattice.yourdomain.com
 ```
 
+#### Trusted-network mode (e.g. Tailscale, LAN)
+
+If you only access Lattice from a trusted network, you can skip the bearer token:
+
+```bash
+LATTICE_AUTH_DISABLED=true
+# Optional: comma-separated CIDRs allowed to reach the API without a token.
+# Defaults to loopback + RFC1918 + Tailscale CGNAT (100.64.0.0/10).
+LATTICE_TRUSTED_CIDRS=127.0.0.0/8,100.64.0.0/10
+```
+
+When auth is disabled, requests from outside the trusted CIDRs are still rejected (with a one-time-per-IP warning in the server log). Hooks may also leave `LATTICE_API_TOKEN` blank in their config.env.
+
+⚠ **Do not enable on a publicly-accessible host.** Reverse proxies hide the real client IP from the bind-address check, so this is enforced at request time using the source IP — anyone whose traffic reaches the server from a trusted CIDR will be admitted without a token.
+
 ## API Reference
 
-All endpoints require `Authorization: Bearer <token>` except health.
+All endpoints require `Authorization: Bearer <token>` except `GET /api/health` and `GET /api/config`. When `LATTICE_AUTH_DISABLED=true`, requests from trusted CIDRs are admitted without a token.
 
 ### Events
 
