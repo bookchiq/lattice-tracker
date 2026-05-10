@@ -26,17 +26,31 @@ if [ -f "$LATTICE_CONFIG_ENV" ]; then
   source "$LATTICE_CONFIG_ENV"
 fi
 
-# Bail out silently if config is missing — don't break Claude Code
-if [ -z "${LATTICE_API_URL:-}" ] || [ -z "${LATTICE_API_TOKEN:-}" ]; then
-  lattice_log "ERROR: Missing LATTICE_API_URL or LATTICE_API_TOKEN in config"
+# Bail out silently if API URL is missing — don't break Claude Code
+if [ -z "${LATTICE_API_URL:-}" ]; then
+  lattice_log "ERROR: Missing LATTICE_API_URL in config"
   return 0 2>/dev/null || exit 0
 fi
 
 # --- Auth header file (reusable, avoids per-invocation temp files) ---
+# When LATTICE_API_TOKEN is empty, hooks emit events without an Authorization header.
+# This requires the server to run with LATTICE_AUTH_DISABLED=true on a trusted network.
 LATTICE_AUTH_HEADER_FILE="${LATTICE_CONFIG_DIR}/.auth-header"
-if [ ! -f "$LATTICE_AUTH_HEADER_FILE" ] || ! grep -q "$LATTICE_API_TOKEN" "$LATTICE_AUTH_HEADER_FILE" 2>/dev/null; then
-  echo "Authorization: Bearer ${LATTICE_API_TOKEN}" > "$LATTICE_AUTH_HEADER_FILE"
-  chmod 600 "$LATTICE_AUTH_HEADER_FILE"
+if [ -n "${LATTICE_API_TOKEN:-}" ]; then
+  if [ ! -f "$LATTICE_AUTH_HEADER_FILE" ] || ! grep -q "$LATTICE_API_TOKEN" "$LATTICE_AUTH_HEADER_FILE" 2>/dev/null; then
+    echo "Authorization: Bearer ${LATTICE_API_TOKEN}" > "$LATTICE_AUTH_HEADER_FILE"
+    chmod 600 "$LATTICE_AUTH_HEADER_FILE"
+  fi
+else
+  # Stale auth header from a previous tokened install? Drop it so curl doesn't send it.
+  [ -f "$LATTICE_AUTH_HEADER_FILE" ] && rm -f "$LATTICE_AUTH_HEADER_FILE"
+fi
+
+# Build curl auth args once — empty array when no token
+if [ -n "${LATTICE_API_TOKEN:-}" ]; then
+  LATTICE_CURL_AUTH_ARGS=(-H @"$LATTICE_AUTH_HEADER_FILE")
+else
+  LATTICE_CURL_AUTH_ARGS=()
 fi
 
 # --- Event Emission ---
@@ -49,7 +63,7 @@ lattice_emit() {
     --max-time 3 \
     --connect-timeout 2 \
     -X POST \
-    -H @"$LATTICE_AUTH_HEADER_FILE" \
+    "${LATTICE_CURL_AUTH_ARGS[@]}" \
     -H "Content-Type: application/json" \
     -d "$event_json" \
     "${LATTICE_API_URL}/api/events" 2>/dev/null)
@@ -69,7 +83,7 @@ lattice_emit_batch() {
     --max-time 3 \
     --connect-timeout 2 \
     -X POST \
-    -H @"$LATTICE_AUTH_HEADER_FILE" \
+    "${LATTICE_CURL_AUTH_ARGS[@]}" \
     -H "Content-Type: application/json" \
     -d "$events_json" \
     "${LATTICE_API_URL}/api/events/batch" 2>/dev/null)

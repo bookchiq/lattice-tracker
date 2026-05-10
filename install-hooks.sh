@@ -32,18 +32,15 @@ echo "Configuration:"
 echo ""
 
 read -rp "  Lattice API URL (e.g., https://lattice.yourdomain.com): " API_URL
-if [[ "$API_URL" != https://* ]]; then
-  echo "ERROR: API URL must start with https://"
+if [[ "$API_URL" != https://* && "$API_URL" != http://* ]]; then
+  echo "ERROR: API URL must start with http:// or https://"
   exit 1
 fi
 # Strip trailing slash
 API_URL="${API_URL%/}"
 
-read -rp "  API Token: " API_TOKEN
-if [ -z "$API_TOKEN" ]; then
-  echo "ERROR: API token is required."
-  exit 1
-fi
+# Token is optional — server may run with LATTICE_AUTH_DISABLED=true on a trusted network.
+read -rp "  API Token (leave blank if server has auth disabled): " API_TOKEN
 
 read -rp "  Device label (e.g., laptop, desktop, vps): " DEVICE_LABEL
 if [ -z "$DEVICE_LABEL" ]; then

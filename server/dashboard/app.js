@@ -3,6 +3,7 @@
 // --- Auth ---
 
 const TOKEN_KEY = 'lattice_token';
+let authRequired = true;
 
 function getToken() {
   return sessionStorage.getItem(TOKEN_KEY);
@@ -16,7 +17,21 @@ function clearToken() {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
-function initAuth() {
+async function initAuth() {
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) {
+      const cfg = await res.json();
+      authRequired = cfg.authRequired !== false;
+    }
+  } catch { /* keep default: authRequired=true */ }
+
+  if (!authRequired) {
+    document.getElementById('btn-logout').hidden = true;
+    showApp();
+    return;
+  }
+
   // Check URL hash for token (#token=...)
   const hash = window.location.hash;
   if (hash.startsWith('#token=')) {
@@ -51,17 +66,19 @@ function showApp() {
 // --- API ---
 
 async function apiFetch(path) {
-  const token = getToken();
-  if (!token) {
-    showAuthScreen();
-    throw new Error('Not authenticated');
+  const headers = {};
+  if (authRequired) {
+    const token = getToken();
+    if (!token) {
+      showAuthScreen();
+      throw new Error('Not authenticated');
+    }
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`/api${path}`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
+  const res = await fetch(`/api${path}`, { headers });
 
-  if (res.status === 401) {
+  if (res.status === 401 && authRequired) {
     clearToken();
     showAuthScreen();
     throw new Error('Invalid token');

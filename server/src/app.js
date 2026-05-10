@@ -12,6 +12,7 @@ import projectRoutes from './routes/projects.js';
 import sessionRoutes from './routes/sessions.js';
 import snapshotRoutes from './routes/snapshots.js';
 import healthRoutes from './routes/health.js';
+import configRoutes from './routes/config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -36,6 +37,8 @@ export async function buildApp(opts = {}) {
     host,
     port,
     dashboardOrigin,
+    authDisabled,
+    trustedCidrs,
     rateLimitMax = 100,
   } = opts;
 
@@ -48,8 +51,19 @@ export async function buildApp(opts = {}) {
   if (host !== undefined) configOverrides.host = host;
   if (port !== undefined) configOverrides.port = port;
   if (dashboardOrigin !== undefined) configOverrides.dashboardOrigin = dashboardOrigin;
+  if (authDisabled !== undefined) configOverrides.authDisabled = authDisabled;
+  if (trustedCidrs !== undefined) configOverrides.trustedCidrs = trustedCidrs;
 
   await app.register(configPlugin, { configOverrides });
+
+  if (app.config.authDisabled) {
+    app.log.warn(
+      `⚠ LATTICE_AUTH_DISABLED=true — API requires no token. ` +
+      `Trusted CIDRs: ${app.config.trustedCidrs.join(', ')}. ` +
+      `Requests from outside these ranges will be rejected. ` +
+      `DO NOT enable on a publicly-accessible host.`
+    );
+  }
 
   await app.register(cors, {
     origin: app.config.dashboardOrigin,
@@ -84,6 +98,7 @@ export async function buildApp(opts = {}) {
     });
 
     await api.register(healthRoutes);
+    await api.register(configRoutes);
     await api.register(eventRoutes);
     await api.register(projectRoutes);
     await api.register(sessionRoutes);
