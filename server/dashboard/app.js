@@ -422,17 +422,18 @@ async function showProjectDetail(projectId) {
   detail.innerHTML = '<div class="skeleton skeleton-card"></div>';
 
   try {
-    const project = await apiFetch(`/projects/${encodeURIComponent(projectId)}`);
-    const sessionsBody = await apiFetch(`/projects/${encodeURIComponent(projectId)}/sessions?limit=10`);
-    const sessions = sessionsBody.data || [];
-
-    renderProjectDetail(project, sessions);
+    const [project, sessionsBody, notesBody] = await Promise.all([
+      apiFetch(`/projects/${encodeURIComponent(projectId)}`),
+      apiFetch(`/projects/${encodeURIComponent(projectId)}/sessions?limit=10`),
+      apiFetch(`/projects/${encodeURIComponent(projectId)}/notes?limit=50`),
+    ]);
+    renderProjectDetail(project, sessionsBody.data || [], notesBody.data || []);
   } catch (err) {
     detail.innerHTML = `<div class="empty-state"><p>Failed to load project: ${escapeHtml(err.message)}</p></div>`;
   }
 }
 
-function renderProjectDetail(project, sessions) {
+function renderProjectDetail(project, sessions, notes = []) {
   const detail = document.getElementById('view-detail');
   const name = project.display_name || project.canonical_name || project.id;
   const snapshot = project.latest_snapshot;
@@ -515,6 +516,22 @@ function renderProjectDetail(project, sessions) {
     detail._contextBlock = contextBlock;
   }
 
+  // Notes
+  html += `<div class="detail-section">
+    <h3>Notes</h3>
+    <form class="note-form" id="note-form">
+      <textarea id="note-text" class="note-input" rows="3" maxlength="4096" placeholder="Add a note about this project — anything fresh in your mind."></textarea>
+      <div class="note-form-row">
+        <span class="note-counter" id="note-counter">0 / 4096</span>
+        <button type="submit" class="btn-primary" id="btn-add-note">Add note</button>
+      </div>
+      <div class="edit-project-error" id="note-error" hidden></div>
+    </form>
+    <div class="note-list" id="note-list">
+      ${notes.length ? notes.map(renderNote).join('') : '<div class="empty-state-inline">No notes yet.</div>'}
+    </div>
+  </div>`;
+
   // Sessions
   html += `<div class="detail-section"><h3>Session History</h3>`;
   if (sessions.length) {
@@ -590,14 +607,85 @@ function renderProjectDetail(project, sessions) {
         body: JSON.stringify(body),
       });
       // Re-render the detail view with fresh data
-      const fresh = await apiFetch(`/projects/${encodeURIComponent(project.id)}`);
-      const sessionsBody = await apiFetch(`/projects/${encodeURIComponent(project.id)}/sessions?limit=10`);
-      renderProjectDetail(fresh, sessionsBody.data || []);
+      const [fresh, sessionsBody, notesBody] = await Promise.all([
+        apiFetch(`/projects/${encodeURIComponent(project.id)}`),
+        apiFetch(`/projects/${encodeURIComponent(project.id)}/sessions?limit=10`),
+        apiFetch(`/projects/${encodeURIComponent(project.id)}/notes?limit=50`),
+      ]);
+      renderProjectDetail(fresh, sessionsBody.data || [], notesBody.data || []);
     } catch (err) {
       errorEl.textContent = `Couldn't save: ${err.message}`;
       errorEl.hidden = false;
     }
   });
+
+  // --- Add note ---
+  const noteForm = document.getElementById('note-form');
+  const noteText = document.getElementById('note-text');
+  const noteCounter = document.getElementById('note-counter');
+  const noteError = document.getElementById('note-error');
+  const noteList = document.getElementById('note-list');
+  const addNoteBtn = document.getElementById('btn-add-note');
+
+  function updateCounter() {
+    noteCounter.textContent = `${noteText.value.length} / 4096`;
+  }
+  updateCounter();
+  noteText.addEventListener('input', updateCounter);
+
+  noteForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    noteError.hidden = true;
+    const text = noteText.value.trim();
+    if (!text) return;
+
+    addNoteBtn.disabled = true;
+    addNoteBtn.textContent = 'Adding…';
+    try {
+      await apiFetch('/events', {
+        method: 'POST',
+        body: JSON.stringify({
+          event_type: 'project.note',
+          project_id: project.id,
+          timestamp: new Date().toISOString(),
+          hostname: 'dashboard',
+          payload: { text },
+        }),
+      });
+      // Optimistically prepend; also re-fetch in the background to stay correct
+      const newNote = {
+        text: text.slice(0, 4096),
+        timestamp: new Date().toISOString(),
+        hostname: 'dashboard',
+      };
+      // Replace the empty-state if present
+      const empty = noteList.querySelector('.empty-state-inline');
+      if (empty) noteList.innerHTML = '';
+      noteList.insertAdjacentHTML('afterbegin', renderNote(newNote));
+      noteText.value = '';
+      updateCounter();
+    } catch (err) {
+      noteError.textContent = `Couldn't add note: ${err.message}`;
+      noteError.hidden = false;
+    } finally {
+      addNoteBtn.disabled = false;
+      addNoteBtn.textContent = 'Add note';
+    }
+  });
+}
+
+function renderNote(note) {
+  const ts = note.timestamp || '';
+  const author = note.hostname ? escapeHtml(note.hostname) : 'unknown';
+  return `
+    <div class="note-item">
+      <div class="note-meta">
+        <span class="note-author">${author}</span>
+        <span data-time="${ts}">${ts ? timeAgo(ts) : ''}</span>
+      </div>
+      <div class="note-text">${escapeHtml(note.text || '')}</div>
+    </div>
+  `;
 }
 
 // --- Device filter ---

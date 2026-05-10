@@ -319,6 +319,30 @@ export function createQueries(db) {
     return _getCheckpointsByProjectId.all(projectId, { limit, offset });
   }
 
+  // -- Notes --
+  const _insertNote = db.prepare(`
+    INSERT INTO notes (project_id, session_id, hostname, timestamp, text)
+    VALUES (@project_id, @session_id, @hostname, @timestamp, @text)
+  `);
+
+  function insertNote(note) {
+    return _insertNote.run({
+      project_id: note.project_id,
+      session_id: note.session_id || null,
+      hostname: note.hostname || null,
+      timestamp: note.timestamp || new Date().toISOString(),
+      text: note.text,
+    });
+  }
+
+  const _getNotesByProjectId = db.prepare(`
+    SELECT * FROM notes WHERE project_id = ? ORDER BY timestamp DESC, id DESC LIMIT @limit OFFSET @offset
+  `);
+
+  function getNotesByProjectId(projectId, { limit = 50, offset = 0 } = {}) {
+    return _getNotesByProjectId.all(projectId, { limit, offset });
+  }
+
   return {
     insertEvent,
     upsertProject,
@@ -340,5 +364,7 @@ export function createQueries(db) {
     insertCheckpoint,
     getLatestCheckpoint,
     getCheckpointsByProjectId,
+    insertNote,
+    getNotesByProjectId,
   };
 }

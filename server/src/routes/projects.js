@@ -59,6 +59,14 @@ export default async function projectRoutes(fastify) {
     return { data: checkpoints, limit, offset };
   });
 
+  // GET /api/projects/:id/notes
+  fastify.get('/projects/:id/notes', async (request) => {
+    const limit = clampInt(request.query.limit, 50, 200);
+    const offset = clampOffset(request.query.offset);
+    const notes = queries.getNotesByProjectId(request.params.id, { limit, offset });
+    return { data: notes, limit, offset };
+  });
+
   // PATCH /api/projects/:id
   fastify.patch('/projects/:id', {
     schema: {

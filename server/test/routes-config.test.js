@@ -45,6 +45,7 @@ describe('GET /api/config (discovery manifest)', () => {
         'git.branch_switch',
         'git.pr_created',
         'project.tag',
+        'project.note',
       ]);
     });
 
