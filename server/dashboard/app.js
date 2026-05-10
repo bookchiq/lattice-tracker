@@ -66,9 +66,9 @@ function showApp() {
 
 // --- API ---
 
-async function apiFetch(path) {
+async function apiFetch(path, init = {}) {
   await authReady;
-  const headers = {};
+  const headers = { ...(init.headers || {}) };
   if (!authDisabled) {
     const token = getToken();
     if (!token) {
@@ -77,8 +77,12 @@ async function apiFetch(path) {
     }
     headers['Authorization'] = `Bearer ${token}`;
   }
+  // Default to JSON when sending a body
+  if (init.body && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
-  const res = await fetch(`/api${path}`, { headers });
+  const res = await fetch(`/api${path}`, { ...init, headers });
 
   if (res.status === 401 && !authDisabled) {
     clearToken();
@@ -433,13 +437,32 @@ function renderProjectDetail(project, sessions) {
   const name = project.display_name || project.canonical_name || project.id;
   const snapshot = project.latest_snapshot;
   const checkpoint = project.latest_checkpoint;
+  const fallbackName = project.canonical_name || project.id;
 
   let html = `
     <div class="detail-header">
-      <div>
-        <h2 class="detail-title">${escapeHtml(name)}</h2>
+      <div class="detail-header-main">
+        <div class="detail-title-row" id="detail-title-row">
+          <h2 class="detail-title">${escapeHtml(name)}</h2>
+          <button class="btn-edit-project" id="btn-edit-project" type="button" aria-label="Edit project name and tag" title="Edit name and tag">Edit</button>
+        </div>
         <div class="detail-id">${escapeHtml(project.id)}</div>
         ${project.client_tag ? `<span class="badge badge-tag detail-tag">${escapeHtml(project.client_tag)}</span>` : ''}
+        <form class="edit-project-form" id="edit-project-form" hidden>
+          <label class="edit-project-field">
+            <span>Display name</span>
+            <input type="text" id="edit-display-name" maxlength="255" value="${escapeHtml(project.display_name || '')}" placeholder="${escapeHtml(fallbackName)}">
+          </label>
+          <label class="edit-project-field">
+            <span>Tag</span>
+            <input type="text" id="edit-client-tag" maxlength="255" value="${escapeHtml(project.client_tag || '')}" placeholder="e.g. work, client-name">
+          </label>
+          <div class="edit-project-actions">
+            <button type="submit" class="btn-primary">Save</button>
+            <button type="button" id="btn-cancel-edit">Cancel</button>
+          </div>
+          <div class="edit-project-error" id="edit-project-error" hidden></div>
+        </form>
       </div>
       <button class="btn-back" id="btn-back">Back to projects</button>
     </div>
@@ -530,6 +553,51 @@ function renderProjectDetail(project, sessions) {
       });
     });
   }
+
+  // --- Inline edit (display_name + client_tag) ---
+  const titleRow = document.getElementById('detail-title-row');
+  const editBtn = document.getElementById('btn-edit-project');
+  const form = document.getElementById('edit-project-form');
+  const cancelBtn = document.getElementById('btn-cancel-edit');
+  const errorEl = document.getElementById('edit-project-error');
+  const nameInput = document.getElementById('edit-display-name');
+
+  function showEditMode() {
+    titleRow.hidden = true;
+    form.hidden = false;
+    errorEl.hidden = true;
+    nameInput.focus();
+    nameInput.select();
+  }
+  function hideEditMode() {
+    form.hidden = true;
+    titleRow.hidden = false;
+  }
+
+  editBtn.addEventListener('click', showEditMode);
+  cancelBtn.addEventListener('click', hideEditMode);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorEl.hidden = true;
+    const body = {
+      display_name: nameInput.value.trim(),
+      client_tag: document.getElementById('edit-client-tag').value.trim(),
+    };
+    try {
+      await apiFetch(`/projects/${encodeURIComponent(project.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      // Re-render the detail view with fresh data
+      const fresh = await apiFetch(`/projects/${encodeURIComponent(project.id)}`);
+      const sessionsBody = await apiFetch(`/projects/${encodeURIComponent(project.id)}/sessions?limit=10`);
+      renderProjectDetail(fresh, sessionsBody.data || []);
+    } catch (err) {
+      errorEl.textContent = `Couldn't save: ${err.message}`;
+      errorEl.hidden = false;
+    }
+  });
 }
 
 // --- Device filter ---
