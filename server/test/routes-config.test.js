@@ -1,6 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildApp, closeApp } from './helpers.js';
+import { EVENT_TYPES } from '../src/constants/event-types.js';
 
 describe('GET /api/config (discovery manifest)', () => {
   describe('with auth enabled (default)', () => {
@@ -34,19 +35,7 @@ describe('GET /api/config (discovery manifest)', () => {
     it('includes the full eventTypes list', async () => {
       const res = await app.inject({ method: 'GET', url: '/api/config' });
       const body = res.json();
-      assert.deepEqual(body.eventTypes, [
-        'session.start',
-        'session.end',
-        'session.heartbeat',
-        'session.waiting',
-        'session.checkpoint',
-        'git.snapshot',
-        'git.commit',
-        'git.branch_switch',
-        'git.pr_created',
-        'project.tag',
-        'project.note',
-      ]);
+      assert.deepEqual(body.eventTypes, EVENT_TYPES);
     });
 
     it('includes rateLimit { max, windowSeconds }', async () => {
@@ -55,12 +44,28 @@ describe('GET /api/config (discovery manifest)', () => {
       assert.deepEqual(body.rateLimit, { max: 100, windowSeconds: 60 });
     });
 
+    it('includes an endpoints map covering per-project sub-resources', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/config' });
+      const body = res.json();
+      assert.equal(typeof body.endpoints, 'object');
+      assert.notEqual(body.endpoints, null);
+
+      // Spot-check a few well-known keys, including project sub-resources.
+      assert.equal(body.endpoints.events, '/api/events');
+      assert.equal(body.endpoints.projects, '/api/projects');
+      assert.equal(body.endpoints.projectNotes, '/api/projects/:id/notes');
+      assert.equal(body.endpoints.projectSessions, '/api/projects/:id/sessions');
+      assert.equal(body.endpoints.projectCheckpoints, '/api/projects/:id/checkpoints');
+      assert.equal(body.endpoints.health, '/api/health');
+      assert.equal(body.endpoints.config, '/api/config');
+    });
+
     it('exposes exactly the documented keys (no accidental decorator pollution)', async () => {
       const res = await app.inject({ method: 'GET', url: '/api/config' });
       const body = res.json();
       assert.deepEqual(
         Object.keys(body).sort(),
-        ['authDisabled', 'eventTypes', 'rateLimit', 'version'].sort()
+        ['authDisabled', 'endpoints', 'eventTypes', 'rateLimit', 'version'].sort()
       );
     });
   });

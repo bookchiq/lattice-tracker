@@ -39,6 +39,7 @@ The full spec is in `docs/plans/lattice-spec.md`. Key directories:
 - **Checkpoint system:** Continuity summaries written by Claude Code itself at meaningful moments (PR created, merge) or manually via `/lattice:checkpoint`. Output goes to `.lattice/last-checkpoint.json`.
 - **Hook fast paths:** `post-tool-use.sh` and `stop.sh` fire on every Bash call / every response — they must exit immediately when there's nothing to do.
 - **Agent-native parity:** Everything in the dashboard must be queryable via API. Slash commands are just curl + jq compositions.
+- **Migration convention:** `server/src/db/schema.sql` is the v1 baseline only — never add later schema changes there. Migrations 2+ live as inline blocks in `server/src/plugins/db.js` using the `migrate(version, label, sql)` helper, which wraps the DDL and `user_version` bump in `db.transaction(...)` so they apply atomically. `user_version` is bumped only after the DDL succeeds.
 
 ## API Shape
 

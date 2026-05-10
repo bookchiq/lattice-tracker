@@ -3,6 +3,7 @@
 // --- Auth ---
 
 const TOKEN_KEY = 'lattice_token';
+const DASHBOARD_HOSTNAME = 'dashboard';
 let authDisabled = false;
 let authReady;
 
@@ -438,34 +439,33 @@ function renderProjectDetail(project, sessions, notes = []) {
   const name = project.display_name || project.canonical_name || project.id;
   const snapshot = project.latest_snapshot;
   const checkpoint = project.latest_checkpoint;
-  const fallbackName = project.canonical_name || project.id;
 
   let html = `
     <div class="detail-header">
       <div class="detail-header-main">
         <div class="detail-title-row" id="detail-title-row">
           <h2 class="detail-title">${escapeHtml(name)}</h2>
-          <button class="btn-edit-project" id="btn-edit-project" type="button" aria-label="Edit project name and tag" title="Edit name and tag">Edit</button>
+          <button class="btn btn-edit-project" id="btn-edit-project" type="button" aria-label="Edit project name and tag" title="Edit name and tag">Edit</button>
         </div>
         <div class="detail-id">${escapeHtml(project.id)}</div>
         ${project.client_tag ? `<span class="badge badge-tag detail-tag">${escapeHtml(project.client_tag)}</span>` : ''}
         <form class="edit-project-form" id="edit-project-form" hidden>
           <label class="edit-project-field">
             <span>Display name</span>
-            <input type="text" id="edit-display-name" maxlength="255" value="${escapeHtml(project.display_name || '')}" placeholder="${escapeHtml(fallbackName)}">
+            <input type="text" id="edit-display-name" maxlength="255" value="${escapeHtml(project.display_name || '')}" placeholder="${escapeHtml(project.canonical_name || project.id)}">
           </label>
           <label class="edit-project-field">
             <span>Tag</span>
             <input type="text" id="edit-client-tag" maxlength="255" value="${escapeHtml(project.client_tag || '')}" placeholder="e.g. work, client-name">
           </label>
           <div class="edit-project-actions">
-            <button type="submit" class="btn-primary">Save</button>
-            <button type="button" id="btn-cancel-edit">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="button" class="btn" id="btn-cancel-edit">Cancel</button>
           </div>
           <div class="edit-project-error" id="edit-project-error" hidden></div>
         </form>
       </div>
-      <button class="btn-back" id="btn-back">Back to projects</button>
+      <button class="btn btn-back" id="btn-back">Back to projects</button>
     </div>
   `;
 
@@ -523,7 +523,7 @@ function renderProjectDetail(project, sessions, notes = []) {
       <textarea id="note-text" class="note-input" rows="3" maxlength="4096" placeholder="Add a note about this project — anything fresh in your mind."></textarea>
       <div class="note-form-row">
         <span class="note-counter" id="note-counter">0 / 4096</span>
-        <button type="submit" class="btn-primary" id="btn-add-note">Add note</button>
+        <button type="submit" class="btn btn-primary" id="btn-add-note">Add note</button>
       </div>
       <div class="edit-project-error" id="note-error" hidden></div>
     </form>
@@ -546,7 +546,7 @@ function renderProjectDetail(project, sessions, notes = []) {
           <div class="session-item-meta">
             <span>${escapeHtml(s.device_label || s.hostname || '')}</span>
             <span>${escapeHtml(s.interface || '')}</span>
-            <span data-time="${s.started_at || ''}">${s.started_at ? timeAgo(s.started_at) : ''}</span>
+            <span data-time="${escapeHtml(s.started_at || '')}">${s.started_at ? timeAgo(s.started_at) : ''}</span>
           </div>
         </div>
       `;
@@ -597,22 +597,44 @@ function renderProjectDetail(project, sessions, notes = []) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorEl.hidden = true;
-    const body = {
-      display_name: nameInput.value.trim(),
-      client_tag: document.getElementById('edit-client-tag').value.trim(),
-    };
+    const newDisplayName = nameInput.value.trim();
+    const newClientTag = document.getElementById('edit-client-tag').value.trim();
     try {
       await apiFetch(`/projects/${encodeURIComponent(project.id)}`, {
         method: 'PATCH',
-        body: JSON.stringify(body),
+        body: JSON.stringify({ display_name: newDisplayName, client_tag: newClientTag }),
       });
-      // Re-render the detail view with fresh data
-      const [fresh, sessionsBody, notesBody] = await Promise.all([
-        apiFetch(`/projects/${encodeURIComponent(project.id)}`),
-        apiFetch(`/projects/${encodeURIComponent(project.id)}/sessions?limit=10`),
-        apiFetch(`/projects/${encodeURIComponent(project.id)}/notes?limit=50`),
-      ]);
-      renderProjectDetail(fresh, sessionsBody.data || [], notesBody.data || []);
+      // Surgical update: only the title text and tag badge — preserves note draft,
+      // scroll position, focus, and avoids re-fetching sessions/notes that didn't change.
+      // Mutate the in-memory project so subsequent edits start from current state.
+      project.display_name = newDisplayName;
+      project.client_tag = newClientTag;
+
+      const newName = project.display_name || project.canonical_name || project.id;
+      const titleEl = detail.querySelector('.detail-title');
+      if (titleEl) titleEl.textContent = newName;
+
+      // Update / add / remove the tag badge in place.
+      const headerMain = detail.querySelector('.detail-header-main');
+      let tagEl = detail.querySelector('.detail-tag');
+      if (project.client_tag) {
+        if (!tagEl) {
+          tagEl = document.createElement('span');
+          tagEl.className = 'badge badge-tag detail-tag';
+          // Insert after .detail-id so DOM order matches initial render.
+          const idEl = detail.querySelector('.detail-id');
+          if (idEl && idEl.parentNode === headerMain) {
+            idEl.insertAdjacentElement('afterend', tagEl);
+          } else if (headerMain) {
+            headerMain.appendChild(tagEl);
+          }
+        }
+        tagEl.textContent = project.client_tag;
+      } else if (tagEl) {
+        tagEl.remove();
+      }
+
+      hideEditMode();
     } catch (err) {
       errorEl.textContent = `Couldn't save: ${err.message}`;
       errorEl.hidden = false;
@@ -648,20 +670,17 @@ function renderProjectDetail(project, sessions, notes = []) {
           event_type: 'project.note',
           project_id: project.id,
           timestamp: new Date().toISOString(),
-          hostname: 'dashboard',
+          hostname: DASHBOARD_HOSTNAME,
           payload: { text },
         }),
       });
-      // Optimistically prepend; also re-fetch in the background to stay correct
-      const newNote = {
-        text: text.slice(0, 4096),
-        timestamp: new Date().toISOString(),
-        hostname: 'dashboard',
-      };
-      // Replace the empty-state if present
-      const empty = noteList.querySelector('.empty-state-inline');
-      if (empty) noteList.innerHTML = '';
-      noteList.insertAdjacentHTML('afterbegin', renderNote(newNote));
+      // Refetch the notes list — server is the single source of truth
+      // (avoids client/server cap drift, hostname-rewriting, ordering surprises).
+      const notesBody = await apiFetch(`/projects/${encodeURIComponent(project.id)}/notes?limit=50`);
+      const freshNotes = notesBody.data || [];
+      noteList.innerHTML = freshNotes.length
+        ? freshNotes.map(renderNote).join('')
+        : '<div class="empty-state-inline">No notes yet.</div>';
       noteText.value = '';
       updateCounter();
     } catch (err) {
@@ -681,7 +700,7 @@ function renderNote(note) {
     <div class="note-item">
       <div class="note-meta">
         <span class="note-author">${author}</span>
-        <span data-time="${ts}">${ts ? timeAgo(ts) : ''}</span>
+        <span data-time="${escapeHtml(ts)}">${ts ? timeAgo(ts) : ''}</span>
       </div>
       <div class="note-text">${escapeHtml(note.text || '')}</div>
     </div>

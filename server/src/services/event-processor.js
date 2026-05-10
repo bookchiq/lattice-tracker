@@ -139,8 +139,6 @@ export function createEventProcessor(queries) {
         break;
 
       case 'project.note':
-        // Free-form notes attached to a project, append-only.
-        // Requires projectId + non-empty text; cap at 4096 chars to bound row size.
         if (projectId && typeof payload.text === 'string' && payload.text.trim().length > 0) {
           queries.insertNote({
             project_id: projectId,
