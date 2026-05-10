@@ -3,7 +3,8 @@
 // --- Auth ---
 
 const TOKEN_KEY = 'lattice_token';
-let authRequired = true;
+let authDisabled = false;
+let authReady;
 
 function getToken() {
   return sessionStorage.getItem(TOKEN_KEY);
@@ -22,11 +23,11 @@ async function initAuth() {
     const res = await fetch('/api/config');
     if (res.ok) {
       const cfg = await res.json();
-      authRequired = cfg.authRequired !== false;
+      authDisabled = cfg.authDisabled === true;
     }
-  } catch { /* keep default: authRequired=true */ }
+  } catch { /* keep default: authDisabled=false (fail-closed) */ }
 
-  if (!authRequired) {
+  if (authDisabled) {
     document.getElementById('btn-logout').hidden = true;
     showApp();
     return;
@@ -66,8 +67,9 @@ function showApp() {
 // --- API ---
 
 async function apiFetch(path) {
+  await authReady;
   const headers = {};
-  if (authRequired) {
+  if (!authDisabled) {
     const token = getToken();
     if (!token) {
       showAuthScreen();
@@ -78,7 +80,7 @@ async function apiFetch(path) {
 
   const res = await fetch(`/api${path}`, { headers });
 
-  if (res.status === 401 && authRequired) {
+  if (res.status === 401 && !authDisabled) {
     clearToken();
     showAuthScreen();
     throw new Error('Invalid token');
@@ -693,4 +695,4 @@ setInterval(updateTimeElements, 30000);
 
 // Boot
 initTheme();
-initAuth();
+authReady = initAuth();

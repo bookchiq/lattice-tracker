@@ -1,6 +1,16 @@
 #!/bin/bash
 # Lattice Tracker — Install Script
 # Sets up hooks, config, and heartbeat. Supports macOS (launchd), Linux (systemd/cron).
+#
+# Non-interactive usage:
+#   LATTICE_API_URL=https://lattice.example.com \
+#   LATTICE_API_TOKEN=abc123 \
+#   LATTICE_DEVICE_LABEL=laptop \
+#   ./install-hooks.sh
+#
+# Any of the above env vars that are set will skip the corresponding prompt.
+# LATTICE_API_TOKEN may be explicitly set to an empty string to indicate
+# auth-disabled (trusted-network) mode without being prompted.
 set -o pipefail
 
 echo "=== Lattice Tracker Installer ==="
@@ -31,7 +41,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "Configuration:"
 echo ""
 
-read -rp "  Lattice API URL (e.g., https://lattice.yourdomain.com): " API_URL
+# API URL — env var fallthrough
+if [ -z "${LATTICE_API_URL:-}" ]; then
+  read -rp "  Lattice API URL (e.g., https://lattice.yourdomain.com): " API_URL
+else
+  API_URL="$LATTICE_API_URL"
+  echo "  Using LATTICE_API_URL from env: $API_URL"
+fi
 if [[ "$API_URL" != https://* && "$API_URL" != http://* ]]; then
   echo "ERROR: API URL must start with http:// or https://"
   exit 1
@@ -40,11 +56,89 @@ fi
 API_URL="${API_URL%/}"
 
 # Token is optional — server may run with LATTICE_AUTH_DISABLED=true on a trusted network.
-read -rp "  API Token (leave blank if server has auth disabled): " API_TOKEN
+# Use the `+set` test so an explicitly-empty LATTICE_API_TOKEN ("auth disabled")
+# is honored without prompting; only an unset var triggers the prompt.
+if [ -n "${LATTICE_API_TOKEN+set}" ]; then
+  API_TOKEN="$LATTICE_API_TOKEN"
+  if [ -z "$API_TOKEN" ]; then
+    echo "  Using LATTICE_API_TOKEN from env: (empty — auth-disabled mode)"
+  else
+    echo "  Using LATTICE_API_TOKEN from env: (set)"
+  fi
+else
+  read -rp "  API Token (leave blank if server has auth disabled): " API_TOKEN
+fi
 
-read -rp "  Device label (e.g., laptop, desktop, vps): " DEVICE_LABEL
-if [ -z "$DEVICE_LABEL" ]; then
-  DEVICE_LABEL="$(hostname -s)"
+# Device label — env var fallthrough, then hostname fallback.
+if [ -n "${LATTICE_DEVICE_LABEL:-}" ]; then
+  DEVICE_LABEL="$LATTICE_DEVICE_LABEL"
+  echo "  Using LATTICE_DEVICE_LABEL from env: $DEVICE_LABEL"
+else
+  read -rp "  Device label (e.g., laptop, desktop, vps): " DEVICE_LABEL
+  if [ -z "$DEVICE_LABEL" ]; then
+    DEVICE_LABEL="$(hostname -s)"
+  fi
+fi
+
+# --- HTTP-with-token safety check ---
+# If the API URL is plaintext http:// AND a bearer token is set AND the host
+# is not on a trusted network (loopback / RFC1918 / Tailscale CGNAT / .ts.net),
+# warn the user. In interactive mode, prompt to confirm. In non-interactive
+# mode (any of the LATTICE_* env vars set), warn and proceed.
+if [[ "$API_URL" == http://* && -n "$API_TOKEN" ]]; then
+  # Extract host portion: strip scheme, then strip path, then strip port.
+  URL_HOST="${API_URL#http://}"
+  URL_HOST="${URL_HOST%%/*}"
+  URL_HOST="${URL_HOST%%:*}"
+
+  TRUSTED_HOST=false
+  case "$URL_HOST" in
+    localhost|127.*) TRUSTED_HOST=true ;;
+    10.*) TRUSTED_HOST=true ;;
+    192.168.*) TRUSTED_HOST=true ;;
+    *.ts.net) TRUSTED_HOST=true ;;
+  esac
+
+  # 172.16.0.0 – 172.31.255.255 (RFC1918)
+  if [ "$TRUSTED_HOST" = false ]; then
+    if [[ "$URL_HOST" =~ ^172\.([0-9]+)\. ]]; then
+      OCTET2="${BASH_REMATCH[1]}"
+      if [ "$OCTET2" -ge 16 ] && [ "$OCTET2" -le 31 ]; then
+        TRUSTED_HOST=true
+      fi
+    fi
+  fi
+
+  # 100.64.0.0 – 100.127.255.255 (Tailscale CGNAT)
+  if [ "$TRUSTED_HOST" = false ]; then
+    if [[ "$URL_HOST" =~ ^100\.([0-9]+)\. ]]; then
+      OCTET2="${BASH_REMATCH[1]}"
+      if [ "$OCTET2" -ge 64 ] && [ "$OCTET2" -le 127 ]; then
+        TRUSTED_HOST=true
+      fi
+    fi
+  fi
+
+  if [ "$TRUSTED_HOST" = false ]; then
+    echo ""
+    echo "  WARNING: API token will be sent in plaintext over http:// to a non-trusted-network host ($URL_HOST)."
+    echo "  Consider using https:// or running the server with LATTICE_AUTH_DISABLED=true and leaving the token blank."
+
+    NON_INTERACTIVE=false
+    if [ -n "${LATTICE_API_URL:-}" ] || [ -n "${LATTICE_API_TOKEN+set}" ] || [ -n "${LATTICE_DEVICE_LABEL:-}" ]; then
+      NON_INTERACTIVE=true
+    fi
+
+    if [ "$NON_INTERACTIVE" = false ]; then
+      read -rp "  Continue anyway? [y/N]: " CONFIRM
+      if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+        echo "  Aborted."
+        exit 1
+      fi
+    else
+      echo "  (non-interactive mode — proceeding)"
+    fi
+  fi
 fi
 
 echo ""

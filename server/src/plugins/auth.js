@@ -1,5 +1,8 @@
 import fp from 'fastify-plugin';
 import { timingSafeEqual } from 'node:crypto';
+import ipaddr from 'ipaddr.js';
+
+const WARNED_IPS_MAX = 1024;
 
 function safeTokenCompare(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
@@ -9,48 +12,29 @@ function safeTokenCompare(a, b) {
   return timingSafeEqual(bufA, bufB);
 }
 
-function ipv4ToInt(ip) {
-  const parts = ip.split('.');
-  if (parts.length !== 4) return null;
-  let n = 0;
-  for (const p of parts) {
-    const o = Number(p);
-    if (!Number.isInteger(o) || o < 0 || o > 255 || p === '') return null;
-    n = (n << 8) + o;
-  }
-  return n >>> 0;
-}
-
-// Strip ::ffff: prefix on IPv4-mapped addresses (Node dual-stack reports these)
-function normalizeIp(ip) {
-  if (!ip) return null;
-  if (ip.startsWith('::ffff:')) return ip.slice(7);
-  return ip;
-}
-
-function ipInCidr(ip, cidr) {
-  const slashIdx = cidr.indexOf('/');
-  const range = slashIdx === -1 ? cidr : cidr.slice(0, slashIdx);
-  const bits = slashIdx === -1 ? null : parseInt(cidr.slice(slashIdx + 1), 10);
-
-  // IPv6 loopback — only matches itself (we already normalize ::ffff:127.* to IPv4)
-  if (range === '::1') return ip === '::1';
-
-  const ipInt = ipv4ToInt(ip);
-  const rangeInt = ipv4ToInt(range);
-  if (ipInt === null || rangeInt === null) return false;
-
-  const prefix = bits === null ? 32 : bits;
-  if (prefix === 0) return true;
-  const mask = ((0xFFFFFFFF << (32 - prefix)) >>> 0);
-  return (ipInt & mask) === (rangeInt & mask);
-}
-
 function isTrustedIp(ip, cidrs) {
-  const normalized = normalizeIp(ip);
-  if (!normalized) return false;
-  for (const c of cidrs) {
-    if (ipInCidr(normalized, c)) return true;
+  if (!ip) return false;
+  let addr;
+  try {
+    addr = ipaddr.parse(ip);
+  } catch {
+    return false;
+  }
+  // Normalize IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) to its IPv4 form so
+  // operator-supplied IPv4 CIDRs match the way they read.
+  if (addr.kind() === 'ipv6' && addr.isIPv4MappedAddress()) {
+    addr = addr.toIPv4Address();
+  }
+  for (const cidr of cidrs) {
+    let parsed;
+    try {
+      parsed = ipaddr.parseCIDR(cidr);
+    } catch {
+      // Skip malformed CIDR entries — config validation runs at boot,
+      // but the runtime hot path must never crash on bad input.
+      continue;
+    }
+    if (addr.kind() === parsed[0].kind() && addr.match(parsed)) return true;
   }
   return false;
 }
@@ -59,16 +43,15 @@ async function authPlugin(fastify) {
   const warnedIps = new Set();
 
   fastify.addHook('onRequest', async (request, reply) => {
-    if (!request.url.startsWith('/api/')) return;
-    if ((request.url === '/api/health' || request.url.startsWith('/api/health?')) && request.method === 'GET') return;
-    if ((request.url === '/api/config' || request.url.startsWith('/api/config?')) && request.method === 'GET') return;
-
     if (fastify.config.authDisabled) {
       const ip = request.ip;
       if (isTrustedIp(ip, fastify.config.trustedCidrs)) return;
 
-      // Untrusted IP — log loud warning once per IP, then reject
+      // Untrusted IP — log loud warning once per IP, then reject.
+      // Cap-and-clear bounds the Set so a public-IP scanner cannot grow it
+      // without bound (and operators continue to see warnings after cycling).
       if (!warnedIps.has(ip)) {
+        if (warnedIps.size >= WARNED_IPS_MAX) warnedIps.clear();
         warnedIps.add(ip);
         const xff = request.headers['x-forwarded-for'];
         fastify.log.warn(
@@ -99,6 +82,3 @@ export default fp(authPlugin, {
   dependencies: ['lattice-config'],
   fastify: '5.x',
 });
-
-// Exposed for tests
-export { isTrustedIp, ipInCidr };

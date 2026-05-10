@@ -478,7 +478,8 @@ This could also be wrapped as a Claude Code slash command (`/lattice status`, `/
 
 ## Security
 
-- API protected by a bearer token (stored in 1Password, shared across machines via environment variable)
+- API protected by a bearer token (stored in 1Password, shared across machines via environment variable). Public discovery routes — `/api/health` and `/api/config` — are reachable without a token; everything else (`/api/events`, `/api/projects`, `/api/sessions`, `/api/snapshots`) requires `Authorization: Bearer <token>`.
+- Optional trusted-network mode: setting `LATTICE_AUTH_DISABLED=true` swaps bearer-token enforcement for source-IP allow-listing against `LATTICE_TRUSTED_CIDRS`. See the env-var table above for safe-defaults and the `LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND` escape hatch.
 - HTTPS via Let's Encrypt on the VPS (or Hostinger's built-in SSL)
 - No sensitive data in events (no code content, no full prompts — just the last prompt text and git metadata)
 - Token rotation: manual for now, can automate later
@@ -530,6 +531,21 @@ This gives you:
   }
 }
 ```
+
+### Server environment variables
+
+The Fastify server reads its runtime configuration from environment variables (typically loaded from `.env` via `node --env-file`). The full set:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `3377` | HTTP port to bind |
+| `LATTICE_HOST` | `127.0.0.1` | Listen interface. Bind to `127.0.0.1` for reverse-proxy deployments. |
+| `LATTICE_DB_PATH` | `./lattice.db` | SQLite database file path |
+| `LATTICE_API_TOKEN` | _(required)_ | Bearer token enforced on protected `/api/*` routes. Required unless `LATTICE_AUTH_DISABLED=true`. |
+| `LATTICE_DASHBOARD_ORIGIN` | `http://localhost:3377` | CORS allow-list origin for the dashboard. Set to your public origin in production. |
+| `LATTICE_AUTH_DISABLED` | `false` | When `true`, drops bearer-token enforcement and instead allows requests whose source IP falls within `LATTICE_TRUSTED_CIDRS`. **Security note:** intended for trusted-network deployments only (Tailscale, RFC1918 LAN, localhost). Never enable on a publicly-accessible host. The server logs a startup warning when this is set. |
+| `LATTICE_TRUSTED_CIDRS` | `127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10` | Comma-separated CIDR ranges treated as trusted when `LATTICE_AUTH_DISABLED=true`. Both IPv4 and IPv6 CIDRs are supported (matching uses `ipaddr.js`). Untrusted source IPs receive a 401 and one warning log per IP. |
+| `LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND` | `false` | Escape hatch that allows `LATTICE_AUTH_DISABLED=true` to be combined with a non-loopback `LATTICE_HOST` (e.g. `0.0.0.0`). Off by default — if `LATTICE_AUTH_DISABLED` is true and the bind host is public, the server refuses to start. Only enable when the host is genuinely behind a trusted overlay (e.g. Tailscale interface). |
 
 ---
 

@@ -1,7 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildApp, authHeader, closeApp } from './helpers.js';
-import { isTrustedIp, ipInCidr } from '../src/plugins/auth.js';
 
 describe('Auth', () => {
   let app;
@@ -45,7 +44,7 @@ describe('Auth', () => {
   it('exposes /api/config without auth', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/config' });
     assert.equal(res.statusCode, 200);
-    assert.deepEqual(res.json(), { authRequired: true });
+    assert.equal(res.json().authDisabled, false);
   });
 
   it('allows dashboard without auth', async () => {
@@ -67,10 +66,10 @@ describe('Auth disabled (trusted-network mode)', () => {
     await closeApp(app);
   });
 
-  it('reports authRequired:false via /api/config', async () => {
+  it('reports authDisabled:true via /api/config', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/config' });
     assert.equal(res.statusCode, 200);
-    assert.deepEqual(res.json(), { authRequired: false });
+    assert.equal(res.json().authDisabled, true);
   });
 
   it('allows API request with no token from trusted IP', async () => {
@@ -94,34 +93,3 @@ describe('Auth disabled (trusted-network mode)', () => {
   });
 });
 
-describe('CIDR helpers', () => {
-  it('matches IPv4 CIDR', () => {
-    assert.equal(ipInCidr('127.0.0.1', '127.0.0.0/8'), true);
-    assert.equal(ipInCidr('100.64.0.1', '100.64.0.0/10'), true);
-    assert.equal(ipInCidr('100.127.255.255', '100.64.0.0/10'), true);
-    assert.equal(ipInCidr('100.128.0.0', '100.64.0.0/10'), false);
-    assert.equal(ipInCidr('8.8.8.8', '10.0.0.0/8'), false);
-    assert.equal(ipInCidr('10.5.6.7', '10.0.0.0/8'), true);
-  });
-
-  it('matches single-address CIDR (no prefix)', () => {
-    assert.equal(ipInCidr('1.2.3.4', '1.2.3.4'), true);
-    assert.equal(ipInCidr('1.2.3.5', '1.2.3.4'), false);
-  });
-
-  it('matches IPv6 loopback exactly', () => {
-    assert.equal(ipInCidr('::1', '::1'), true);
-    assert.equal(ipInCidr('::2', '::1'), false);
-  });
-
-  it('isTrustedIp normalizes IPv4-mapped IPv6 addresses', () => {
-    assert.equal(isTrustedIp('::ffff:127.0.0.1', ['127.0.0.0/8']), true);
-    assert.equal(isTrustedIp('::ffff:8.8.8.8', ['127.0.0.0/8']), false);
-  });
-
-  it('isTrustedIp returns false for malformed input', () => {
-    assert.equal(isTrustedIp(null, ['127.0.0.0/8']), false);
-    assert.equal(isTrustedIp('', ['127.0.0.0/8']), false);
-    assert.equal(isTrustedIp('not-an-ip', ['127.0.0.0/8']), false);
-  });
-});

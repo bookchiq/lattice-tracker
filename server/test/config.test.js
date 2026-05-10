@@ -33,8 +33,15 @@ describe('Config plugin', () => {
     assert.equal(app.config.authDisabled, true);
     assert.equal(app.config.apiToken, null);
     assert.ok(Array.isArray(app.config.trustedCidrs));
-    assert.ok(app.config.trustedCidrs.includes('127.0.0.0/8'));
-    assert.ok(app.config.trustedCidrs.includes('100.64.0.0/10'));
+    // Defaults are now narrow: loopback (v4 + v6) + Tailscale CGNAT only.
+    assert.deepEqual(
+      app.config.trustedCidrs,
+      ['127.0.0.0/8', '::1/128', '100.64.0.0/10']
+    );
+    // RFC1918 ranges are no longer trusted by default.
+    assert.ok(!app.config.trustedCidrs.includes('10.0.0.0/8'));
+    assert.ok(!app.config.trustedCidrs.includes('172.16.0.0/12'));
+    assert.ok(!app.config.trustedCidrs.includes('192.168.0.0/16'));
 
     await app.close();
     delete process.env.LATTICE_AUTH_DISABLED;
@@ -72,5 +79,180 @@ describe('Config plugin', () => {
     assert.equal(app.config.authDisabled, false);
 
     await app.close();
+  });
+
+  describe('public-bind refusal when auth disabled', () => {
+    it('refuses to start when authDisabled=true and host=0.0.0.0 without override', async () => {
+      const savedOverride = process.env.LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND;
+      delete process.env.LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND;
+
+      const app = Fastify({ logger: false });
+      await assert.rejects(
+        () => app.register(configPlugin, {
+          configOverrides: { authDisabled: true, apiToken: null, host: '0.0.0.0' },
+        }).ready(),
+        /LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND/
+      );
+      await app.close();
+
+      if (savedOverride !== undefined) process.env.LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND = savedOverride;
+    });
+
+    it('refuses to start when authDisabled=true and host=:: without override', async () => {
+      const savedOverride = process.env.LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND;
+      delete process.env.LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND;
+
+      const app = Fastify({ logger: false });
+      await assert.rejects(
+        () => app.register(configPlugin, {
+          configOverrides: { authDisabled: true, apiToken: null, host: '::' },
+        }).ready(),
+        /LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND/
+      );
+      await app.close();
+
+      if (savedOverride !== undefined) process.env.LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND = savedOverride;
+    });
+
+    it('allows authDisabled=true with host=0.0.0.0 when LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND=true', async () => {
+      const savedOverride = process.env.LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND;
+      process.env.LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND = 'true';
+
+      const app = Fastify({ logger: false });
+      await app.register(configPlugin, {
+        configOverrides: { authDisabled: true, apiToken: null, host: '0.0.0.0' },
+      });
+      await app.ready();
+
+      assert.equal(app.config.authDisabled, true);
+      assert.equal(app.config.host, '0.0.0.0');
+
+      await app.close();
+
+      if (savedOverride === undefined) delete process.env.LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND;
+      else process.env.LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND = savedOverride;
+    });
+
+    it('allows authDisabled=true with default host (127.0.0.1)', async () => {
+      const app = Fastify({ logger: false });
+      await app.register(configPlugin, {
+        configOverrides: { authDisabled: true, apiToken: null, host: '127.0.0.1' },
+      });
+      await app.ready();
+
+      assert.equal(app.config.authDisabled, true);
+      assert.equal(app.config.host, '127.0.0.1');
+
+      await app.close();
+    });
+
+    it('allows host=0.0.0.0 when auth is enabled', async () => {
+      const app = Fastify({ logger: false });
+      await app.register(configPlugin, {
+        configOverrides: { authDisabled: false, apiToken: 'real-token', host: '0.0.0.0' },
+      });
+      await app.ready();
+
+      assert.equal(app.config.authDisabled, false);
+      assert.equal(app.config.host, '0.0.0.0');
+
+      await app.close();
+    });
+  });
+
+  describe('trustedCidrs validation at boot', () => {
+    it('throws when a CIDR has an out-of-range prefix', async () => {
+      const app = Fastify({ logger: false });
+      await assert.rejects(
+        () => app.register(configPlugin, {
+          configOverrides: {
+            apiToken: 'tok',
+            trustedCidrs: ['10.0.0.0/200'],
+          },
+        }).ready(),
+        /Invalid CIDR in trustedCidrs.*10\.0\.0\.0\/200/
+      );
+      await app.close();
+    });
+
+    it('throws when a CIDR has a negative prefix', async () => {
+      const app = Fastify({ logger: false });
+      await assert.rejects(
+        () => app.register(configPlugin, {
+          configOverrides: {
+            apiToken: 'tok',
+            trustedCidrs: ['10.0.0.0/-1'],
+          },
+        }).ready(),
+        /Invalid CIDR in trustedCidrs/
+      );
+      await app.close();
+    });
+
+    it('throws when a CIDR has a non-numeric prefix', async () => {
+      const app = Fastify({ logger: false });
+      await assert.rejects(
+        () => app.register(configPlugin, {
+          configOverrides: {
+            apiToken: 'tok',
+            trustedCidrs: ['10.0.0.0/abc'],
+          },
+        }).ready(),
+        /Invalid CIDR in trustedCidrs/
+      );
+      await app.close();
+    });
+
+    it('throws when a CIDR has a malformed address', async () => {
+      const app = Fastify({ logger: false });
+      await assert.rejects(
+        () => app.register(configPlugin, {
+          configOverrides: {
+            apiToken: 'tok',
+            trustedCidrs: ['not-an-ip/24'],
+          },
+        }).ready(),
+        /Invalid CIDR in trustedCidrs.*not-an-ip/
+      );
+      await app.close();
+    });
+
+    it('accepts valid IPv4 and IPv6 CIDRs', async () => {
+      const app = Fastify({ logger: false });
+      await app.register(configPlugin, {
+        configOverrides: {
+          apiToken: 'tok',
+          trustedCidrs: ['127.0.0.0/8', '::1/128', '2001:db8::/32', '10.0.0.0/8'],
+        },
+      });
+      await app.ready();
+
+      assert.deepEqual(
+        app.config.trustedCidrs,
+        ['127.0.0.0/8', '::1/128', '2001:db8::/32', '10.0.0.0/8']
+      );
+
+      await app.close();
+    });
+  });
+
+  describe('explicit-null overrides do not leak from process.env', () => {
+    it('apiToken: null + authDisabled: true ignores LATTICE_API_TOKEN from env', async () => {
+      const savedTok = process.env.LATTICE_API_TOKEN;
+      process.env.LATTICE_API_TOKEN = 'env-leaked-token';
+
+      const app = Fastify({ logger: false });
+      await app.register(configPlugin, {
+        configOverrides: { apiToken: null, authDisabled: true },
+      });
+      await app.ready();
+
+      assert.equal(app.config.apiToken, null);
+
+      await app.close();
+
+      if (savedTok === undefined) delete process.env.LATTICE_API_TOKEN;
+      else process.env.LATTICE_API_TOKEN = savedTok;
+    });
   });
 });

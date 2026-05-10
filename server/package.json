@@ -17,7 +17,8 @@
     "@fastify/static": "^9.0.0",
     "@fastify/cors": "^11.2.0",
     "@fastify/rate-limit": "^10.2.1",
-    "better-sqlite3": "^12.6.2"
+    "better-sqlite3": "^12.6.2",
+    "ipaddr.js": "^2.3.0"
   },
   "devDependencies": {}
 }
