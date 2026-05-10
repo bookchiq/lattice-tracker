@@ -17,33 +17,36 @@ async function dbPlugin(fastify) {
   db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
 
-  // Migration system using user_version
+  // Migration system using user_version. Each migration runs atomically:
+  // DDL + version bump succeed or fail together. schema.sql is the v1
+  // baseline only; later migrations live as inline blocks below.
   const currentVersion = db.pragma('user_version', { simple: true });
 
-  if (currentVersion < 1) {
-    const schemaPath = path.join(__dirname, '..', 'db', 'schema.sql');
-    const schema = readFileSync(schemaPath, 'utf-8');
-    db.exec(schema);
-    db.pragma('user_version = 1');
-    fastify.log.info('Applied migration 1: initial schema');
+  function migrate(version, label, sql) {
+    if (currentVersion < version) {
+      db.transaction(() => {
+        db.exec(sql);
+        db.pragma(`user_version = ${version}`);
+      })();
+      fastify.log.info(`Applied migration ${version}: ${label}`);
+    }
   }
 
-  if (currentVersion < 2) {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS notes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
-        session_id TEXT REFERENCES sessions(id) ON DELETE RESTRICT,
-        hostname TEXT,
-        timestamp TEXT NOT NULL,
-        text TEXT NOT NULL,
-        created_at TEXT DEFAULT (datetime('now'))
-      );
-      CREATE INDEX IF NOT EXISTS idx_notes_project_id_timestamp ON notes(project_id, timestamp DESC);
-    `);
-    db.pragma('user_version = 2');
-    fastify.log.info('Applied migration 2: notes table');
-  }
+  const schemaPath = path.join(__dirname, '..', 'db', 'schema.sql');
+  migrate(1, 'initial schema', readFileSync(schemaPath, 'utf-8'));
+
+  migrate(2, 'notes table', `
+    CREATE TABLE IF NOT EXISTS notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
+      session_id TEXT REFERENCES sessions(id) ON DELETE RESTRICT,
+      hostname TEXT,
+      timestamp TEXT NOT NULL,
+      text TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_notes_project_id_timestamp ON notes(project_id, timestamp DESC);
+  `);
 
   // Stale session cleanup
   const staleCleanup = db.prepare(`

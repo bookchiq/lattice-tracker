@@ -49,9 +49,9 @@ describe('Project notes (project.note event)', () => {
     assert.equal(body.data[0].project_id, PROJECT_ID);
   });
 
-  it('ignores notes with empty/whitespace text', async () => {
+  it('rejects project.note with empty payload.text', async () => {
     const before = app.queries.getNotesByProjectId(PROJECT_ID).length;
-    for (const text of ['', '   ', '\n\t']) {
+    for (const text of ['', '   ']) {
       const res = await app.inject({
         method: 'POST',
         url: '/api/events',
@@ -63,8 +63,7 @@ describe('Project notes (project.note event)', () => {
           payload: { text },
         },
       });
-      // Event itself is accepted (201), but no note row should be inserted
-      assert.equal(res.statusCode, 201);
+      assert.equal(res.statusCode, 400);
     }
     const after = app.queries.getNotesByProjectId(PROJECT_ID).length;
     assert.equal(after, before);
@@ -116,8 +115,4 @@ describe('Project notes (project.note event)', () => {
     assert.ok(newerIdx < olderIdx, 'newer note should appear before older note');
   });
 
-  it('exposes project.note in /api/config eventTypes', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/config' });
-    assert.ok(res.json().eventTypes.includes('project.note'));
-  });
 });

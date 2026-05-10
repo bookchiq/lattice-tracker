@@ -14,6 +14,17 @@ const eventSchema = {
   },
 };
 
+function isInvalidProjectNote(evt) {
+  return (
+    evt.event_type === 'project.note' &&
+    (typeof evt.payload !== 'object' ||
+      evt.payload === null ||
+      Array.isArray(evt.payload) ||
+      typeof evt.payload.text !== 'string' ||
+      evt.payload.text.trim().length === 0)
+  );
+}
+
 export default async function eventRoutes(fastify) {
   const processEvent = createEventProcessor(fastify.queries);
   const processInTransaction = fastify.db.transaction(processEvent);
@@ -33,6 +44,11 @@ export default async function eventRoutes(fastify) {
     schema: { body: eventSchema },
     bodyLimit: 1048576, // 1MB
   }, async (request, reply) => {
+    if (isInvalidProjectNote(request.body)) {
+      reply.code(400);
+      return { error: 'invalid_payload', message: 'project.note requires non-empty payload.text' };
+    }
+
     const result = processInTransaction(request.body);
 
     if (result.duplicate) {
@@ -55,6 +71,11 @@ export default async function eventRoutes(fastify) {
     },
     bodyLimit: 5242880, // 5MB
   }, async (request, reply) => {
+    if (request.body.some(isInvalidProjectNote)) {
+      reply.code(400);
+      return { error: 'invalid_payload', message: 'project.note requires non-empty payload.text' };
+    }
+
     const results = processBatch(request.body);
     reply.code(201);
     return { ok: true, results };

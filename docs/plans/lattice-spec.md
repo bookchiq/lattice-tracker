@@ -204,6 +204,18 @@ Events emitted by hooks → received by the API.
 | `session.checkpoint` | Stop hook (auto) or slash command (manual) | Meaningful moment or user-initiated | `session_id`, `summary`, `trigger_reason` |
 | `project.tag` | Manual (CLI/dashboard) | User tags a project | `client_tag`, `display_name` |
 
+**Note on `PATCH /api/projects/:id` vs `project.tag` events:** The dashboard's project rename UI updates `display_name` and `client_tag` directly via `PATCH /api/projects/:id` (see API Endpoints below) without emitting a corresponding `project.tag` event. This is an intentional carve-out for ergonomic dashboard updates — the append-only event log does not capture renames performed this way. The `project.tag` event type remains available for clients that want full audit-trail coverage; they can post it via `/api/events` instead of (or in addition to) the PATCH route.
+
+### Conventions
+
+**Reserved hostname values.** The `hostname` field on every event is self-reported by the sender. Its purpose is *provenance* (where did this event come from?), not authentication — the API does not verify it. Lattice uses the following conventions:
+
+- **Hooks** send the real machine hostname, derived from `hostname -s` (or the `LATTICE_HOSTNAME` override in per-machine config).
+- **Dashboard** sends the literal string `dashboard` for any browser-originated events (currently only `project.note`). This value is reserved for browser-originated events.
+- **Agents** posting via slash commands or scripts (e.g. a future `/lattice:note`) SHOULD send the real machine hostname they're running on, matching the hook convention. Headless agents that genuinely have no machine identity may use a descriptive label, but should avoid the reserved `dashboard` value.
+
+Because hostname is self-reported, a real machine literally named `dashboard` would collide with the reserved value. Under the default trust model — `LATTICE_AUTH_DISABLED=true` on a single-user, single-network deployment (Tailscale or loopback) — hostname collisions and spoofing are acceptable risks: there is no second user to impersonate, and provenance is advisory, not load-bearing.
+
 ---
 
 ## Hook Implementation
@@ -484,6 +496,12 @@ This could also be wrapped as a Claude Code slash command (`/lattice status`, `/
 - No sensitive data in events (no code content, no full prompts — just the last prompt text and git metadata)
 - Token rotation: manual for now, can automate later
 - The git archive repo is private on GitHub
+
+### Rate limiting
+
+All `/api/*` requests share a single 100/min/IP bucket implemented via Fastify's `@fastify/rate-limit` plugin. Hooks (heartbeats every 3 min/session, plus per-Bash `post-tool-use` events for git commands) and dashboard polling both consume from this same bucket.
+
+At single-user scale this cap is generous and unlikely to be hit in practice. The trade-off is that high-volume background traffic (e.g. a flurry of git commands during a rebase) could in theory crowd out interactive actions like saving a `project.note` from the dashboard. If multi-user support is added later, per-route limits should be introduced — for example, a tighter ~30/min cap on content mutations like `project.note`, with heartbeats kept at a higher allowance — using a custom `keyGenerator` so the buckets are isolated by event type.
 
 ---
 
