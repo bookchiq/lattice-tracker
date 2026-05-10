@@ -63,6 +63,7 @@ mv "$TEMP_SESSION_FILE" "${ACTIVE_SESSIONS_DIR}/${SESSION_ID}.json"
 BATCH_JSON="$(jq -n \
   --arg session_id "$SESSION_ID" \
   --arg project_id "$LATTICE_PROJECT_ID" \
+  --arg canonical_name "${LATTICE_CANONICAL_NAME:-}" \
   --arg hostname "$LATTICE_HOSTNAME" \
   --arg timestamp "$TIMESTAMP" \
   --arg interface "$INTERFACE" \
@@ -81,6 +82,7 @@ BATCH_JSON="$(jq -n \
         interface: $interface,
         device_label: $device_label,
         git_remote_url: $git_remote_url,
+        canonical_name: $canonical_name,
         cwd: $cwd
       }
     },

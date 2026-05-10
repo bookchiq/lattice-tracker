@@ -112,11 +112,17 @@ lattice_detect_project() {
     if [[ ! "$LATTICE_PROJECT_ID" =~ ^[a-zA-Z0-9:._-]+$ ]]; then
       LATTICE_PROJECT_ID="invalid:$(echo -n "$remote_url" | shasum -a 256 | cut -c1-16)"
     fi
+    # Canonical name = repo basename (matches what the server would derive)
+    LATTICE_CANONICAL_NAME="${LATTICE_PROJECT_ID##*:}"
   else
     LATTICE_GIT_REMOTE_URL=""
     local hash_input
     hash_input="$(hostname):$(pwd)"
     LATTICE_PROJECT_ID="local:$(echo -n "$hash_input" | shasum -a 256 | cut -c1-16)"
+    # For local projects, the project ID is a hash for stability across sessions
+    # — but the canonical name is the directory basename so the dashboard shows
+    # something human-readable instead of the hash.
+    LATTICE_CANONICAL_NAME="$(basename "$PWD")"
   fi
 }
 
