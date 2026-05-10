@@ -138,6 +138,20 @@ export function createEventProcessor(queries) {
         }
         break;
 
+      case 'project.note':
+        // Free-form notes attached to a project, append-only.
+        // Requires projectId + non-empty text; cap at 4096 chars to bound row size.
+        if (projectId && typeof payload.text === 'string' && payload.text.trim().length > 0) {
+          queries.insertNote({
+            project_id: projectId,
+            session_id: event.session_id || null,
+            hostname: event.hostname || null,
+            timestamp: event.timestamp,
+            text: payload.text.slice(0, 4096),
+          });
+        }
+        break;
+
       default:
         // For any other event type that arrives for a waiting session,
         // implicitly transition to active

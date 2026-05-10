@@ -28,6 +28,23 @@ async function dbPlugin(fastify) {
     fastify.log.info('Applied migration 1: initial schema');
   }
 
+  if (currentVersion < 2) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
+        session_id TEXT REFERENCES sessions(id) ON DELETE RESTRICT,
+        hostname TEXT,
+        timestamp TEXT NOT NULL,
+        text TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_notes_project_id_timestamp ON notes(project_id, timestamp DESC);
+    `);
+    db.pragma('user_version = 2');
+    fastify.log.info('Applied migration 2: notes table');
+  }
+
   // Stale session cleanup
   const staleCleanup = db.prepare(`
     UPDATE sessions

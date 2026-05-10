@@ -67,6 +67,16 @@ CREATE TABLE IF NOT EXISTS checkpoints (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
+  session_id TEXT REFERENCES sessions(id) ON DELETE RESTRICT,
+  hostname TEXT,
+  timestamp TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(session_id);
 CREATE INDEX IF NOT EXISTS idx_events_project_id ON events(project_id);
@@ -80,3 +90,4 @@ CREATE INDEX IF NOT EXISTS idx_checkpoints_project_id_timestamp ON checkpoints(p
 CREATE INDEX IF NOT EXISTS idx_events_session_timestamp ON events(session_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_git_snapshots_project_timestamp ON git_snapshots(project_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_projects_client_tag ON projects(client_tag);
+CREATE INDEX IF NOT EXISTS idx_notes_project_id_timestamp ON notes(project_id, timestamp DESC);

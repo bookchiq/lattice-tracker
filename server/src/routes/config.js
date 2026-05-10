@@ -13,6 +13,7 @@ const EVENT_TYPES = [
   'git.branch_switch',
   'git.pr_created',
   'project.tag',
+  'project.note',
 ];
 
 export default async function configRoutes(fastify) {
