@@ -20,18 +20,19 @@ Write a checkpoint summary for the current session. This helps future sessions
 }
 ```
 
-2. POST the checkpoint to the Lattice API. First, source the config:
+2. POST the checkpoint to the Lattice API. First, source the config and build a conditional auth args array (server may run with auth disabled — token may be empty):
 
 ```bash
 source ~/.config/lattice/config.env
+[ -n "$LATTICE_API_TOKEN" ] && AUTH_ARGS=(-H "Authorization: Bearer $LATTICE_API_TOKEN") || AUTH_ARGS=()
 ```
 
 Then POST:
 
 ```bash
-curl -s -X POST "${LATTICE_API_URL}/api/events" \
-  -H "Authorization: Bearer ${LATTICE_API_TOKEN}" \
+curl -s -X POST "${AUTH_ARGS[@]}" \
   -H "Content-Type: application/json" \
+  "${LATTICE_API_URL}/api/events" \
   -d "$(jq -n \
     --arg sid "${CLAUDE_SESSION_ID}" \
     --slurpfile cp .lattice/last-checkpoint.json \

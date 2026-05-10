@@ -128,13 +128,35 @@ If you only access Lattice from a trusted network, you can skip the bearer token
 ```bash
 LATTICE_AUTH_DISABLED=true
 # Optional: comma-separated CIDRs allowed to reach the API without a token.
-# Defaults to loopback + RFC1918 + Tailscale CGNAT (100.64.0.0/10).
-LATTICE_TRUSTED_CIDRS=127.0.0.0/8,100.64.0.0/10
+# Defaults to loopback + Tailscale CGNAT only (127.0.0.0/8, ::1/128, 100.64.0.0/10).
+# To also trust your LAN, opt in explicitly:
+LATTICE_TRUSTED_CIDRS=127.0.0.0/8,::1/128,100.64.0.0/10,10.0.0.0/8,192.168.0.0/16
 ```
 
-When auth is disabled, requests from outside the trusted CIDRs are still rejected (with a one-time-per-IP warning in the server log). Hooks may also leave `LATTICE_API_TOKEN` blank in their config.env.
+CIDRs are validated at boot via `ipaddr.js` (IPv4 + IPv6); a malformed entry causes a hard fail with a clear error. Untrusted source IPs receive a 401 with a one-time-per-IP warning in the server log.
 
-⚠ **Do not enable on a publicly-accessible host.** Reverse proxies hide the real client IP from the bind-address check, so this is enforced at request time using the source IP — anyone whose traffic reaches the server from a trusted CIDR will be admitted without a token.
+⚠ **Do not enable on a publicly-accessible host.** Reverse proxies hide the real client IP from the bind-address check, so this is enforced at request time using the source IP — anyone whose traffic reaches the server from a trusted CIDR will be admitted without a token. As a safety net, the server **refuses to start** when `LATTICE_AUTH_DISABLED=true` is combined with `LATTICE_HOST=0.0.0.0` (or `::`) unless you explicitly opt in:
+
+```bash
+LATTICE_AUTH_DISABLED_ALLOW_PUBLIC_BIND=true
+```
+
+Only enable that override on hosts that are genuinely behind a trusted overlay (e.g. a Tailscale-only Linux box).
+
+Hooks may also leave `LATTICE_API_TOKEN` blank in their `config.env` to skip sending the `Authorization` header entirely.
+
+#### Discovery endpoint
+
+`GET /api/config` is unauthenticated and returns a self-describing manifest the dashboard (and any agent) uses to bootstrap:
+
+```json
+{
+  "authDisabled": true,
+  "version": "0.1.0",
+  "eventTypes": ["session.start", "session.end", ...],
+  "rateLimit": { "max": 100, "windowSeconds": 60 }
+}
+```
 
 ## API Reference
 
