@@ -29,20 +29,7 @@ fi
 TRIGGER_REASON="$(cat "$TEMP_FLAG" 2>/dev/null)" || TRIGGER_REASON="unknown"
 rm -f "$TEMP_FLAG" 2>/dev/null
 
-REASON="A checkpoint-worthy event occurred (${TRIGGER_REASON}). Please write a checkpoint summary for this session.
-
-Run /lattice:checkpoint to create the checkpoint, or write one manually:
-1. Summarize what you were working on (2-3 sentences, be specific)
-2. Note what's in progress, what's blocked, and next steps
-3. Write to .lattice/last-checkpoint.json
-4. POST it to the Lattice API (conditional auth — server may run with auth disabled):
-   source ~/.config/lattice/config.env
-   [ -n \"\$LATTICE_API_TOKEN\" ] && AUTH_ARGS=(-H \"Authorization: Bearer \$LATTICE_API_TOKEN\") || AUTH_ARGS=()
-   curl -s -X POST \"\${AUTH_ARGS[@]}\" \\
-     -H \"Content-Type: application/json\" \\
-     \"\${LATTICE_API_URL}/api/events\" \\
-     -d \$(jq -n --arg sid \"\${CLAUDE_SESSION_ID}\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" --slurpfile cp .lattice/last-checkpoint.json \\
-       '{event_type: \"session.checkpoint\", session_id: \$sid, timestamp: \$ts, payload: \$cp[0]}')"
+REASON="Lattice checkpoint needed (trigger: ${TRIGGER_REASON}). Use the lattice:checkpoint skill — see skills/checkpoint/SKILL.md for the format."
 
 # Output JSON that blocks Claude's stop and injects checkpoint instructions
 jq -n --arg reason "$REASON" '{
