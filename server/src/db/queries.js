@@ -56,6 +56,24 @@ export function createQueries(db) {
     });
   }
 
+  // Ensure a project row exists for FK safety, without touching last_activity_at.
+  // Used for passive lifecycle events (heartbeat, waiting, end) that shouldn't
+  // surface a project as "recently updated."
+  const _ensureProject = db.prepare(`
+    INSERT INTO projects (id, git_remote_url, canonical_name, created_at)
+    VALUES (@id, @git_remote_url, @canonical_name, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      git_remote_url = COALESCE(@git_remote_url, projects.git_remote_url)
+  `);
+
+  function ensureProject(project) {
+    return _ensureProject.run({
+      id: project.id,
+      git_remote_url: project.git_remote_url || null,
+      canonical_name: project.canonical_name || null,
+    });
+  }
+
   const _getProjects = db.prepare(`SELECT * FROM projects ORDER BY last_activity_at DESC LIMIT @limit OFFSET @offset`);
   const _getProjectsByTag = db.prepare(`SELECT * FROM projects WHERE client_tag = @client_tag ORDER BY last_activity_at DESC LIMIT @limit OFFSET @offset`);
   const _getActiveProjects = db.prepare(`
@@ -346,6 +364,7 @@ export function createQueries(db) {
   return {
     insertEvent,
     upsertProject,
+    ensureProject,
     getProjects,
     getProjectById,
     updateProject,

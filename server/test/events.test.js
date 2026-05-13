@@ -229,6 +229,70 @@ describe('Session state machine', () => {
     assert.equal(session.status, 'active');
     assert.equal(session.last_heartbeat_at, '2026-03-26T10:06:00Z');
   });
+
+  it('does not bump project last_activity_at on heartbeat/waiting/end', async () => {
+    // After session.start (10:00), session.waiting (10:05), and session.heartbeat (10:06),
+    // the project's last_activity_at must still reflect the session.start time —
+    // passive lifecycle events should not surface a project as "recently active."
+    const before = await app.inject({
+      method: 'GET',
+      url: '/api/projects/github.com:sm:test',
+      headers: authHeader(),
+    });
+    assert.equal(JSON.parse(before.body).last_activity_at, '2026-03-26T10:00:00Z');
+
+    // session.end should also not bump
+    await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers: authHeader(),
+      payload: {
+        event_type: 'session.end',
+        session_id: 'sm-sess',
+        project_id: 'github.com:sm:test',
+        timestamp: '2026-03-26T10:30:00Z',
+      },
+    });
+    const after = await app.inject({
+      method: 'GET',
+      url: '/api/projects/github.com:sm:test',
+      headers: authHeader(),
+    });
+    assert.equal(JSON.parse(after.body).last_activity_at, '2026-03-26T10:00:00Z');
+  });
+
+  it('does bump project last_activity_at on real-work events', async () => {
+    // A git.commit must move the timestamp forward — that's actual work.
+    await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers: authHeader(),
+      payload: {
+        event_type: 'session.start',
+        session_id: 'work-sess',
+        project_id: 'github.com:work:test',
+        timestamp: '2026-03-26T10:00:00Z',
+      },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers: authHeader(),
+      payload: {
+        event_type: 'git.commit',
+        session_id: 'work-sess',
+        project_id: 'github.com:work:test',
+        timestamp: '2026-03-26T10:42:00Z',
+        payload: { branch: 'main', commit_hash: 'abc123' },
+      },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/projects/github.com:work:test',
+      headers: authHeader(),
+    });
+    assert.equal(JSON.parse(res.body).last_activity_at, '2026-03-26T10:42:00Z');
+  });
 });
 
 describe('Checkpoints', () => {
