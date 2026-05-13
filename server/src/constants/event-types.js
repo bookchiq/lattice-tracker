@@ -20,3 +20,10 @@ export const EVENT_TYPES = [
 ];
 
 export const EVENT_TYPE_SET = new Set(EVENT_TYPES);
+
+// Passive lifecycle: don't bump projects.last_activity_at (heartbeats fire every 3 min).
+export const PASSIVE_EVENT_TYPES = new Set([
+  'session.heartbeat',
+  'session.waiting',
+  'session.end',
+]);

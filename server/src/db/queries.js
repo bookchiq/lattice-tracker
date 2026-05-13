@@ -39,11 +39,16 @@ export function createQueries(db) {
   }
 
   // -- Projects --
+  // Pass `last_activity_at: null` to ensure the row exists without advancing
+  // the activity timestamp (used for passive events like heartbeat).
   const _upsertProject = db.prepare(`
     INSERT INTO projects (id, git_remote_url, canonical_name, last_activity_at, created_at)
     VALUES (@id, @git_remote_url, @canonical_name, @last_activity_at, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
-      last_activity_at = MAX(COALESCE(projects.last_activity_at, ''), @last_activity_at),
+      last_activity_at = MAX(
+        COALESCE(projects.last_activity_at, ''),
+        COALESCE(@last_activity_at, projects.last_activity_at, '')
+      ),
       git_remote_url = COALESCE(@git_remote_url, projects.git_remote_url)
   `);
 
@@ -52,25 +57,7 @@ export function createQueries(db) {
       id: project.id,
       git_remote_url: project.git_remote_url || null,
       canonical_name: project.canonical_name || null,
-      last_activity_at: project.last_activity_at || new Date().toISOString(),
-    });
-  }
-
-  // Ensure a project row exists for FK safety, without touching last_activity_at.
-  // Used for passive lifecycle events (heartbeat, waiting, end) that shouldn't
-  // surface a project as "recently updated."
-  const _ensureProject = db.prepare(`
-    INSERT INTO projects (id, git_remote_url, canonical_name, created_at)
-    VALUES (@id, @git_remote_url, @canonical_name, datetime('now'))
-    ON CONFLICT(id) DO UPDATE SET
-      git_remote_url = COALESCE(@git_remote_url, projects.git_remote_url)
-  `);
-
-  function ensureProject(project) {
-    return _ensureProject.run({
-      id: project.id,
-      git_remote_url: project.git_remote_url || null,
-      canonical_name: project.canonical_name || null,
+      last_activity_at: project.last_activity_at ?? null,
     });
   }
 
@@ -364,7 +351,6 @@ export function createQueries(db) {
   return {
     insertEvent,
     upsertProject,
-    ensureProject,
     getProjects,
     getProjectById,
     updateProject,

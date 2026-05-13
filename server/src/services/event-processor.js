@@ -1,12 +1,4 @@
-// Passive lifecycle events: they keep a session alive but don't represent
-// new work on the project, so they must not bump projects.last_activity_at.
-// Heartbeats in particular fire every 3 minutes for every open session,
-// which would otherwise make every open project look "just updated."
-const PASSIVE_EVENT_TYPES = new Set([
-  'session.heartbeat',
-  'session.waiting',
-  'session.end',
-]);
+import { PASSIVE_EVENT_TYPES } from '../constants/event-types.js';
 
 /**
  * Process a single event inside a transaction.
@@ -32,20 +24,15 @@ export function createEventProcessor(queries) {
       }
     }
 
-    // 1. Upsert project. Passive events ensure the row exists (FK safety) but
-    // do NOT bump last_activity_at — that timestamp should reflect real work,
-    // not just an open session breathing.
+    // 1. Upsert project. Passive events pass null for last_activity_at so the
+    // row exists (FK safety) without advancing the activity timestamp.
     if (projectId) {
-      const projectFields = {
+      queries.upsertProject({
         id: projectId,
         git_remote_url: payload.git_remote_url || null,
         canonical_name: payload.canonical_name || projectId.split(':').pop(),
-      };
-      if (PASSIVE_EVENT_TYPES.has(event.event_type)) {
-        queries.ensureProject(projectFields);
-      } else {
-        queries.upsertProject({ ...projectFields, last_activity_at: event.timestamp });
-      }
+        last_activity_at: PASSIVE_EVENT_TYPES.has(event.event_type) ? null : event.timestamp,
+      });
     }
 
     // 2. For session.start, upsert session BEFORE inserting event (FK safety)
