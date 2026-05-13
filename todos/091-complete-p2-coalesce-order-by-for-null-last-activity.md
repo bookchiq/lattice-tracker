@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "091"
 tags: [code-review, data-integrity, dashboard, sql]
@@ -59,11 +59,25 @@ Option A. Pair with todo #089 (consolidate upsert) — both touch `queries.js` a
 
 ## Acceptance Criteria
 
-- [ ] All five `ORDER BY last_activity_at DESC` queries updated to `ORDER BY COALESCE(last_activity_at, created_at) DESC`
-- [ ] Dashboard cell falls back to `created_at` when `last_activity_at` is null
-- [ ] New regression test: a project with only heartbeats appears in `GET /api/projects` results in the correct relative position (by `created_at`)
+- [x] All five `ORDER BY last_activity_at DESC` queries updated to `ORDER BY COALESCE(last_activity_at, created_at) DESC`
+- [x] Dashboard cell falls back to `created_at` when `last_activity_at` is null
+- [x] New regression test: a project with only heartbeats appears in `GET /api/projects` results in the correct relative position (by `created_at`)
 
 ## Resources
 
 - PR #13: https://github.com/bookchiq/lattice-tracker/pull/13
 - Reviewer: data-integrity-guardian
+
+## Work Log
+
+**2026-05-13** — Implemented Option A on branch `fix/project-activity-skip-heartbeats`.
+
+- `server/src/db/queries.js`: Updated all five `ORDER BY last_activity_at DESC` clauses to `ORDER BY COALESCE(last_activity_at, created_at) DESC` (`_getProjects`, `_getProjectsByTag`, `_getActiveProjects`, `_getIdleProjects`, `_searchProjects`). For the join queries that reference `p.last_activity_at`, COALESCEd with `p.created_at`.
+- `server/dashboard/app.js`: Activity cell now falls back to `project.created_at` when `last_activity_at` is null/empty, for both the rendered `timeAgo(...)` text and the `data-time` attribute (used by the live re-rendering).
+- `server/test/events.test.js`: Added new suite `Project listing with NULL last_activity_at (heartbeat-only project)` with two tests:
+  1. A project auto-created via a single `session.heartbeat` (no prior `session.start`) has `last_activity_at = NULL` but still appears in `GET /api/projects`.
+  2. The COALESCE sort places that heartbeat-only project (sorting by its `datetime('now')` `created_at`) above a project whose only `last_activity_at` is dated 2020 — verifying the fallback actively participates in ORDER BY rather than just rendering.
+
+  Initially attempted a stricter ordering test comparing two heartbeat-only projects against each other, but `projects.created_at` has second-level resolution (`datetime('now')`) so rapidly-inserted siblings tie and SQLite's tie-break order isn't guaranteed. Switched to comparing against a clearly-older `last_activity_at` to make the test deterministic.
+
+- Verified: `npm test` from `server/` → **83 tests passing, 0 failures**.

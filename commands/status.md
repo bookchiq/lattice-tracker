@@ -22,7 +22,7 @@ curl -s "${AUTH_ARGS[@]}" "${LATTICE_API_URL}/api/projects"
 4. Display the results in a readable table format showing:
    - Project name (display_name or canonical_name)
    - Client tag (if set)
-   - Last activity (relative time)
+   - Last work (relative time of the most recent real-work event — not heartbeats)
    - Status (active/idle based on whether active sessions exist)
 
 5. For projects with active sessions, also show the device and branch.

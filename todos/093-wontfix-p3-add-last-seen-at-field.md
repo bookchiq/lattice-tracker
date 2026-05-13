@@ -1,5 +1,5 @@
 ---
-status: pending
+status: wontfix
 priority: p3
 issue_id: "093"
 tags: [code-review, agent-native, schema, follow-up]
@@ -50,6 +50,12 @@ Add a `GET /api/projects?include=last_seen_at` option that left-joins on `events
 ## Recommended Action
 
 Defer until an actual agent workflow needs it. Tracked here so the gap isn't forgotten.
+
+## Resolution
+
+**Status: wontfix (deferred)** — Closed without implementation per the recommended action. The gap is real but speculative: no current slash command, dashboard view, or agent workflow needs "last any-event seen" today. Implementing `last_seen_at` now would be premature — a column + migration + API field for a hypothetical user.
+
+Reopen this (rename `wontfix` → `pending`) when a concrete need surfaces. The implementation path (Option A) is captured above and stays valid against the consolidated `upsertProject` from #089.
 
 ## Technical Details
 
