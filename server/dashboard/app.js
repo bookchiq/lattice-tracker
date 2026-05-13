@@ -306,8 +306,9 @@ function renderProjectList(projects) {
     }
 
     const actEl = el.querySelector('[data-field="activity"]');
-    actEl.textContent = project.last_activity_at ? timeAgo(project.last_activity_at) : '';
-    actEl.dataset.time = project.last_activity_at || '';
+    const activityTime = project.last_activity_at || project.created_at || '';
+    actEl.textContent = activityTime ? timeAgo(activityTime) : '';
+    actEl.dataset.time = activityTime;
 
     el.querySelector('[data-field="device"]').textContent =
       session ? `${session.device_label || session.hostname || ''}` : '';

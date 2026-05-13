@@ -39,11 +39,16 @@ export function createQueries(db) {
   }
 
   // -- Projects --
+  // Pass `last_activity_at: null` to ensure the row exists without advancing
+  // the activity timestamp (used for passive events like heartbeat).
   const _upsertProject = db.prepare(`
     INSERT INTO projects (id, git_remote_url, canonical_name, last_activity_at, created_at)
     VALUES (@id, @git_remote_url, @canonical_name, @last_activity_at, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
-      last_activity_at = MAX(COALESCE(projects.last_activity_at, ''), @last_activity_at),
+      last_activity_at = MAX(
+        COALESCE(projects.last_activity_at, ''),
+        COALESCE(@last_activity_at, projects.last_activity_at, '')
+      ),
       git_remote_url = COALESCE(@git_remote_url, projects.git_remote_url)
   `);
 
@@ -52,17 +57,17 @@ export function createQueries(db) {
       id: project.id,
       git_remote_url: project.git_remote_url || null,
       canonical_name: project.canonical_name || null,
-      last_activity_at: project.last_activity_at || new Date().toISOString(),
+      last_activity_at: project.last_activity_at ?? null,
     });
   }
 
-  const _getProjects = db.prepare(`SELECT * FROM projects ORDER BY last_activity_at DESC LIMIT @limit OFFSET @offset`);
-  const _getProjectsByTag = db.prepare(`SELECT * FROM projects WHERE client_tag = @client_tag ORDER BY last_activity_at DESC LIMIT @limit OFFSET @offset`);
+  const _getProjects = db.prepare(`SELECT * FROM projects ORDER BY COALESCE(last_activity_at, created_at) DESC LIMIT @limit OFFSET @offset`);
+  const _getProjectsByTag = db.prepare(`SELECT * FROM projects WHERE client_tag = @client_tag ORDER BY COALESCE(last_activity_at, created_at) DESC LIMIT @limit OFFSET @offset`);
   const _getActiveProjects = db.prepare(`
     SELECT DISTINCT p.* FROM projects p
     INNER JOIN sessions s ON s.project_id = p.id
     WHERE s.status IN ('active', 'waiting_for_input')
-    ORDER BY p.last_activity_at DESC
+    ORDER BY COALESCE(p.last_activity_at, p.created_at) DESC
     LIMIT @limit OFFSET @offset
   `);
   const _getIdleProjects = db.prepare(`
@@ -70,7 +75,7 @@ export function createQueries(db) {
     WHERE NOT EXISTS (
       SELECT 1 FROM sessions s WHERE s.project_id = p.id AND s.status IN ('active', 'waiting_for_input')
     )
-    ORDER BY p.last_activity_at DESC
+    ORDER BY COALESCE(p.last_activity_at, p.created_at) DESC
     LIMIT @limit OFFSET @offset
   `);
   const _getProjectById = db.prepare(`SELECT * FROM projects WHERE id = ?`);
@@ -81,7 +86,7 @@ export function createQueries(db) {
   const _searchProjects = db.prepare(`
     SELECT * FROM projects
     WHERE canonical_name LIKE @q OR display_name LIKE @q OR id LIKE @q
-    ORDER BY last_activity_at DESC LIMIT @limit OFFSET @offset
+    ORDER BY COALESCE(last_activity_at, created_at) DESC LIMIT @limit OFFSET @offset
   `);
 
   function getProjects(filters = {}) {

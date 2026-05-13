@@ -1,3 +1,5 @@
+import { PASSIVE_EVENT_TYPES } from '../constants/event-types.js';
+
 /**
  * Process a single event inside a transaction.
  * Handles project upsert, session management, and event-type-specific side effects.
@@ -22,13 +24,14 @@ export function createEventProcessor(queries) {
       }
     }
 
-    // 1. Upsert project (always update last_activity_at)
+    // 1. Upsert project. Passive events pass null for last_activity_at so the
+    // row exists (FK safety) without advancing the activity timestamp.
     if (projectId) {
       queries.upsertProject({
         id: projectId,
         git_remote_url: payload.git_remote_url || null,
         canonical_name: payload.canonical_name || projectId.split(':').pop(),
-        last_activity_at: event.timestamp,
+        last_activity_at: PASSIVE_EVENT_TYPES.has(event.event_type) ? null : event.timestamp,
       });
     }
 
